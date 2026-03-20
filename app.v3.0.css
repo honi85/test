@@ -27,18 +27,20 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 10px;
+  width: 12px;
   background: transparent;
 }
 ::-webkit-scrollbar-track {
-  background-color: #edece9;
+  background-color: #efede8;
+  border-left: 1px solid rgba(0, 0, 0, 0.04);
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #d3d1cb;
-  border-radius: 5px;
+  background-color: #c9c4bb;
+  border-radius: 999px;
+  border: 2px solid #efede8;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #bdbcb6;
+  background-color: #b3aca2;
 }
 
 @media (min-width: 767px) {
@@ -216,31 +218,34 @@ body {
 
 #root > .aside > button {
   position: absolute;
-  left: -40px;
-  top: 10px;
-  width: 30px;
-  height: 30px;
+  left: -60px;
+  top: 18px;
+  width: 44px;
+  height: 60px;
   background: #fff;
   border: 1px solid #e6e1dd;
-  border-radius: 6px;
+  border-radius: 14px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: -2px 2px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: -4px 8px 18px rgba(0, 0, 0, 0.14);
   transition:
     background 0.15s ease,
-    box-shadow 0.15s ease;
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 #root > .aside > button:hover {
-  background: #f5f3f0;
-  box-shadow: -3px 3px 8px rgba(0, 0, 0, 0.13);
+  background: #f8f6f2;
+  box-shadow: -6px 10px 20px rgba(0, 0, 0, 0.16);
+  transform: translateX(-1px);
 }
 
 #root > .aside > button:active {
-  background: #ece9e3;
+  background: #efeae3;
+  transform: translateX(0);
 }
 
 /* �꾨쾭嫄� �꾩씠肄�: SVG �④린怨� CSS 3�좎쑝濡� ��泥� */
@@ -251,12 +256,12 @@ body {
 #root > .aside > button::before {
   content: "";
   display: block;
-  width: 16px;
-  height: 12px;
+  width: 20px;
+  height: 16px;
   background-image: repeating-linear-gradient(
     to bottom,
-    #555 0px 2px,
-    transparent 2px 5px
+    #666 0px 3px,
+    transparent 3px 6px
   );
 }
 
