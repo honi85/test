@@ -58,7 +58,7 @@ var isSwipe = false;
 var autoPlay = undefined;
 var isIOSDevice = /iP(hone|ad|od)/i.test(navigator.userAgent);
 
-const NOT_ALLOWED_NEXT_MSG = "이전 학습 완료 후 다음 학습이 가능합니다.";
+const NOT_ALLOWED_NEXT_MSG = "현재 페이지 학습 완료 후 다음 학습이 가능합니다.";
 
 var _c = $("#details").val();
 // 학습 본문 HTML을 불러온 뒤 화면/진도 초기화를 시작한다.
@@ -162,13 +162,16 @@ function setIOSFullscreenUI(isFullscreen) {
 
 function syncIOSVideoFullscreen(isFullscreen) {
   clearTimeout(iosFullscreenSyncTimer);
-  iosFullscreenSyncTimer = setTimeout(function () {
-    setIOSFullscreenUI(isFullscreen);
-    if (isIOSRotating) return;
-    try {
-      window.parent.postMessage("toggleiOSMobileFullscreen");
-    } catch (e) {}
-  }, isFullscreen ? 120 : 220);
+  iosFullscreenSyncTimer = setTimeout(
+    function () {
+      setIOSFullscreenUI(isFullscreen);
+      if (isIOSRotating) return;
+      try {
+        window.parent.postMessage("toggleiOSMobileFullscreen");
+      } catch (e) {}
+    },
+    isFullscreen ? 120 : 220,
+  );
 }
 
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
@@ -605,15 +608,13 @@ function page_initialize() {
     var viewBottom = viewTop + menuScroller.clientHeight;
     var padding = 20;
 
-    if (
-      menuTop >= viewTop + padding &&
-      menuBottom <= viewBottom - padding
-    ) {
+    if (menuTop >= viewTop + padding && menuBottom <= viewBottom - padding) {
       return;
     }
 
     var nextTop =
-      menuTop - Math.max((menuScroller.clientHeight - activeMenu.offsetHeight) / 2, 0);
+      menuTop -
+      Math.max((menuScroller.clientHeight - activeMenu.offsetHeight) / 2, 0);
 
     if (typeof menuScroller.scrollTo === "function") {
       menuScroller.scrollTo({
@@ -811,18 +812,20 @@ function page_initialize() {
 
   // 현재 페이지가 아닌 이미지들은 다시 data-src로 돌려 메모리를 해제한다.
   function _releaseInactivePageImages(id) {
-    $("[data-page-id]:not([data-page-id='" + id + "']) img[src]").each(function () {
-      var $img = $(this);
-      var src = $img.attr("src");
-      var originSrc = $img.attr("data-origin-src") || src;
-      if (!originSrc || originSrc.startsWith("data:")) return;
+    $("[data-page-id]:not([data-page-id='" + id + "']) img[src]").each(
+      function () {
+        var $img = $(this);
+        var src = $img.attr("src");
+        var originSrc = $img.attr("data-origin-src") || src;
+        if (!originSrc || originSrc.startsWith("data:")) return;
 
-      $img
-        .attr("data-src", originSrc)
-        .attr("data-origin-src", originSrc)
-        .removeAttr("src")
-        .removeAttr("data-resized");
-    });
+        $img
+          .attr("data-src", originSrc)
+          .attr("data-origin-src", originSrc)
+          .removeAttr("src")
+          .removeAttr("data-resized");
+      },
+    );
   }
 
   function pageShowed(id) {
@@ -1168,8 +1171,12 @@ function page_initialize() {
       if (
         !!answers.find((x) => {
           var uv = vs[0];
-          const u = String(uv).toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
-          const oo = String(x).toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+          const u = String(uv)
+            .toLowerCase()
+            .replace(/[^0-9a-z가-힣]/g, "");
+          const oo = String(x)
+            .toLowerCase()
+            .replace(/[^0-9a-z가-힣]/g, "");
           return oo === u;
         })
       ) {
@@ -1192,8 +1199,12 @@ function page_initialize() {
     var state = "fail";
     if (
       !!answers.find((x) => {
-        const oo = String(x).toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
-        const u = String(uv).toLowerCase().replace(/[^0-9a-z가-힣]/g, "");
+        const oo = String(x)
+          .toLowerCase()
+          .replace(/[^0-9a-z가-힣]/g, "");
+        const u = String(uv)
+          .toLowerCase()
+          .replace(/[^0-9a-z가-힣]/g, "");
         return oo === u;
       })
     ) {
