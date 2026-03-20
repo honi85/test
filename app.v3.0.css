@@ -19,6 +19,13 @@
   --toc-active-bg: #f1efe9;
   --toc-active-mark: #3f6d5a;
   --toc-section-bg: #f6f4f0;
+  --shell-bg: #f6f2ec;
+  --shell-panel: rgba(255, 255, 255, 0.74);
+  --shell-shadow: 0 24px 48px rgba(34, 29, 24, 0.08);
+  --shell-shadow-soft: 0 10px 24px rgba(34, 29, 24, 0.08);
+  --control-dark: #27303b;
+  --control-dark-strong: #1d242d;
+  --control-line: rgba(255, 255, 255, 0.28);
 }
 
 ul {
@@ -39,10 +46,16 @@ body {
   padding: 0;
   width: 100%;
   height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(180deg, #fbf8f4 0%, var(--shell-bg) 100%);
 }
 
 #root {
   height: 100%;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0) 26%),
+    radial-gradient(circle at 86% 10%, rgba(223, 215, 204, 0.24) 0%, rgba(223, 215, 204, 0) 24%);
 }
 
 ::-webkit-scrollbar {
@@ -64,7 +77,7 @@ body {
 
 @media (min-width: 767px) {
   #root {
-    padding-right: 240px;
+    padding-right: 252px;
     transition: padding-right 0.3s ease-in-out;
   }
 
@@ -78,6 +91,7 @@ body {
   overflow: hidden;
   min-height: 100%;
   position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.44) 0%, rgba(255, 255, 255, 0.08) 100%);
 }
 
 .swiper-button-prev,
@@ -105,12 +119,14 @@ body {
   height: 88px;
   background: linear-gradient(
     180deg,
-    rgba(58, 67, 80, 0.98) 0%,
-    rgba(29, 35, 44, 0.98) 100%
+    rgba(57, 67, 82, 0.94) 0%,
+    rgba(26, 33, 42, 0.96) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: 0 12px 28px rgba(16, 20, 27, 0.28);
-  backdrop-filter: blur(6px);
+  border: 1px solid var(--control-line);
+  box-shadow:
+    0 16px 30px rgba(20, 24, 31, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
   opacity: 0;
   transition:
     opacity 0.18s ease,
@@ -182,9 +198,10 @@ body {
 #screen_body > .swiper-button-next:hover {
   background: linear-gradient(
     180deg,
-    rgba(76, 88, 106, 0.99) 0%,
-    rgba(33, 39, 49, 0.99) 100%
+    rgba(73, 85, 102, 0.98) 0%,
+    rgba(28, 35, 44, 0.99) 100%
   );
+  transform: translateY(-1px);
 }
 
 #screen_body > .swiper-button-prev:before,
@@ -261,11 +278,13 @@ body {
   justify-content: center;
   background: linear-gradient(
     180deg,
-    rgba(58, 67, 80, 0.96) 0%,
-    rgba(29, 35, 44, 0.96) 100%
+    rgba(57, 67, 82, 0.94) 0%,
+    rgba(26, 33, 42, 0.96) 100%
   );
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: 0 12px 28px rgba(16, 20, 27, 0.26);
+  border: 1px solid var(--control-line);
+  box-shadow:
+    0 16px 30px rgba(20, 24, 31, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: #fff;
   cursor: pointer;
   z-index: 1200;
@@ -308,7 +327,12 @@ body {
 }
 
 .has-padding .module-item > div {
-  padding: 20px;
+  padding: 22px 24px;
+  background: var(--shell-panel);
+  border: 1px solid rgba(216, 208, 197, 0.7);
+  border-radius: 28px;
+  box-shadow: var(--shell-shadow);
+  backdrop-filter: blur(12px);
 }
 
 #root > .aside {
@@ -318,17 +342,18 @@ body {
   bottom: 0;
   background: var(--toc-bg);
   border-left: 1px solid var(--toc-line);
-  width: 240px;
+  width: 252px;
   transition: all 0.3s ease-in-out;
   z-index: 1000;
-  box-shadow: -12px 0 30px rgba(28, 26, 23, 0.08);
-  backdrop-filter: blur(14px);
+  box-shadow: -16px 0 40px rgba(28, 26, 23, 0.08);
+  backdrop-filter: blur(16px);
 }
 
 #root > .aside > ul {
   width: 100%;
   height: 100%;
   overflow-y: auto;
+  padding: 12px 0 24px;
 }
 
 #root > .aside > button {
@@ -337,7 +362,7 @@ body {
   top: 16px;
   width: 40px;
   height: 40px;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.82);
   border: 1px solid rgba(215, 208, 199, 0.8);
   border-radius: 12px;
   padding: 0;
@@ -345,7 +370,8 @@ body {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: -2px 6px 14px rgba(30, 27, 24, 0.08);
+  box-shadow: var(--shell-shadow-soft);
+  backdrop-filter: blur(12px);
   transition:
     background 0.15s ease,
     box-shadow 0.15s ease,
@@ -356,7 +382,7 @@ body {
 
 #root > .aside > button:hover {
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: -3px 8px 16px rgba(30, 27, 24, 0.1);
+  box-shadow: 0 14px 26px rgba(30, 27, 24, 0.1);
   transform: translateX(-1px);
 }
 
@@ -424,7 +450,7 @@ body {
 
 @media (max-width: 767px) {
   #root > .aside {
-    transform: translateX(240px);
+    transform: translateX(252px);
   }
 
   /* �꾨쾭嫄� �꾩씠肄섏� �뚯쟾 遺덊븘�� */
@@ -438,7 +464,7 @@ body {
 
 #root.menu-off > .aside,
 #root.menu-hide > .aside {
-  transform: translateX(240px) !important;
+  transform: translateX(252px) !important;
 }
 
 /* �꾨쾭嫄� �꾩씠肄섏� �곹깭蹂� �뚯쟾 遺덊븘�� */
@@ -451,8 +477,8 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  gap: 10px;
-  padding: 0 14px;
+  gap: 12px;
+  padding: 0 16px;
   color: var(--toc-text);
   font-size: 13px;
   width: 100%;
@@ -460,7 +486,7 @@ body {
   border: none;
   background: transparent;
   cursor: pointer;
-  height: 50px;
+  min-height: 50px;
   transition:
     background 0.18s ease,
     color 0.18s ease,
@@ -478,9 +504,9 @@ body {
 }
 
 .index-item .status > div {
-  width: 20px;
-  height: 20px;
-  background: #61756a;
+  width: 22px;
+  height: 22px;
+  background: #58645e;
   border-radius: 100%;
   display: flex;
   align-items: center;
@@ -512,7 +538,7 @@ body {
 
 .index-item.active,
 .index-item:hover {
-  background: rgba(78, 72, 64, 0.04);
+  background: rgba(78, 72, 64, 0.045);
   color: var(--toc-text-strong);
 }
 
@@ -547,12 +573,12 @@ body {
 }
 
 #root > aside ul.index-list > .header-item {
-  height: 50px;
+  height: 42px;
 
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  padding: 0 10px;
+  padding: 0 14px;
 }
 
 #root > aside ul.index-list > .header-item button {
@@ -571,7 +597,8 @@ body {
   color: #687068;
   font-weight: 600;
   cursor: default;
-  height: 42px;
+  height: 40px;
+  min-height: 40px;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
@@ -624,7 +651,11 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  color: var(--brand-green);
+  color: var(--control-dark);
+  background: rgba(255, 255, 255, 0.88);
+  border-radius: 999px;
+  box-shadow: var(--shell-shadow-soft);
+  backdrop-filter: blur(12px);
 }
 
 .autoplay-progress svg {
@@ -636,7 +667,7 @@ body {
   width: 100%;
   height: 100%;
   stroke-width: 4px;
-  stroke: var(--brand-green);
+  stroke: var(--control-dark);
   fill: none;
   stroke-dashoffset: calc(125.6 * (1 - var(--progress)));
   stroke-dasharray: 125.6;
