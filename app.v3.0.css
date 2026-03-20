@@ -2,6 +2,17 @@
   box-sizing: border-box;
 }
 
+:root {
+  --brand-green: #1e5b45;
+  --brand-green-strong: #174635;
+  --brand-green-soft: #e8f1ed;
+  --brand-green-line: #cfe1d9;
+  --ui-ink: #22312c;
+  --ui-muted: #6b7d75;
+  --ui-panel: #f7faf8;
+  --ui-panel-strong: #edf4f0;
+}
+
 ul {
   list-style-type: none;
   padding: 0;
@@ -31,16 +42,16 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-track {
-  background-color: #efede8;
-  border-left: 1px solid rgba(0, 0, 0, 0.04);
+  background-color: #eef4f1;
+  border-left: 1px solid rgba(30, 91, 69, 0.08);
 }
 ::-webkit-scrollbar-thumb {
-  background-color: #c9c4bb;
+  background-color: rgba(30, 91, 69, 0.32);
   border-radius: 999px;
-  border: 2px solid #efede8;
+  border: 2px solid #eef4f1;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #b3aca2;
+  background-color: rgba(30, 91, 69, 0.48);
 }
 
 @media (min-width: 767px) {
@@ -64,7 +75,7 @@ body {
 .swiper-button-prev,
 .swiper-button-next {
   position: absolute;
-  background: rgba(32, 34, 36, 0.7);
+  background: rgba(30, 91, 69, 0.82);
   width: 44px;
   height: 44px;
   border-radius: 999px;
@@ -84,9 +95,14 @@ body {
   margin-top: -44px;
   width: 52px;
   height: 88px;
-  background: rgba(36, 39, 42, 0.82);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  background: linear-gradient(
+    180deg,
+    rgba(30, 91, 69, 0.96) 0%,
+    rgba(23, 70, 53, 0.96) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 12px 28px rgba(19, 53, 41, 0.24);
+  backdrop-filter: blur(6px);
   opacity: 0;
   transition:
     opacity 0.18s ease,
@@ -144,7 +160,11 @@ body {
 
 #screen_body > .swiper-button-prev:hover,
 #screen_body > .swiper-button-next:hover {
-  background: rgba(28, 31, 34, 0.9);
+  background: linear-gradient(
+    180deg,
+    rgba(34, 107, 80, 0.98) 0%,
+    rgba(23, 70, 53, 0.98) 100%
+  );
 }
 
 #screen_body > .swiper-button-prev:after {
@@ -187,8 +207,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(17, 24, 39, 0.78);
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.22);
+  background: linear-gradient(
+    180deg,
+    rgba(30, 91, 69, 0.94) 0%,
+    rgba(23, 70, 53, 0.94) 100%
+  );
+  box-shadow: 0 12px 28px rgba(19, 53, 41, 0.24);
   color: #fff;
   cursor: pointer;
   z-index: 1200;
@@ -239,11 +263,13 @@ body {
   right: 0;
   top: 0;
   bottom: 0;
-  background: #ffffff;
-  border-left: 1px solid #e6e1dd;
+  background: rgba(247, 250, 248, 0.96);
+  border-left: 1px solid var(--brand-green-line);
   width: 240px;
   transition: all 0.3s ease-in-out;
   z-index: 1000;
+  box-shadow: -12px 0 30px rgba(18, 53, 41, 0.08);
+  backdrop-filter: blur(14px);
 }
 
 #root > .aside > ul {
@@ -258,15 +284,15 @@ body {
   top: 18px;
   width: 44px;
   height: 60px;
-  background: #fff;
-  border: 1px solid #e6e1dd;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f6f3 100%);
+  border: 1px solid var(--brand-green-line);
   border-radius: 14px;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: -4px 8px 18px rgba(0, 0, 0, 0.14);
+  box-shadow: -6px 12px 24px rgba(18, 53, 41, 0.14);
   transition:
     background 0.15s ease,
     box-shadow 0.15s ease,
@@ -274,13 +300,13 @@ body {
 }
 
 #root > .aside > button:hover {
-  background: #f8f6f2;
-  box-shadow: -6px 10px 20px rgba(0, 0, 0, 0.16);
+  background: linear-gradient(180deg, #ffffff 0%, #e8f1ed 100%);
+  box-shadow: -8px 14px 26px rgba(18, 53, 41, 0.18);
   transform: translateX(-1px);
 }
 
 #root > .aside > button:active {
-  background: #efeae3;
+  background: #e6f0eb;
   transform: translateX(0);
 }
 
@@ -296,7 +322,7 @@ body {
   height: 16px;
   background-image: repeating-linear-gradient(
     to bottom,
-    #666 0px 3px,
+    var(--brand-green) 0px 3px,
     transparent 3px 6px
   );
 }
@@ -330,14 +356,20 @@ body {
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 0 10px;
-  color: #666666;
+  gap: 10px;
+  padding: 0 14px;
+  color: var(--ui-muted);
   font-size: 13px;
   width: 100%;
   text-align: left;
   border: none;
+  background: transparent;
   cursor: pointer;
-  height: 44px;
+  height: 50px;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .index-item.disabled {
@@ -352,7 +384,7 @@ body {
 .index-item .status > div {
   width: 20px;
   height: 20px;
-  background: #ffcd00;
+  background: var(--brand-green);
   border-radius: 100%;
   display: flex;
   align-items: center;
@@ -380,6 +412,17 @@ body {
 
 .index-item.active .ico {
   opacity: 1;
+}
+
+.index-item.active,
+.index-item:hover {
+  background: linear-gradient(90deg, rgba(30, 91, 69, 0.12) 0%, rgba(30, 91, 69, 0.02) 100%);
+  color: var(--ui-ink);
+}
+
+.index-item.active {
+  box-shadow: inset 3px 0 0 var(--brand-green);
+  font-weight: 600;
 }
 
 .index-item .ico svg {
@@ -421,18 +464,19 @@ body {
 }
 
 #root > aside ul.index-list > li {
-  border-bottom: 1px solid #e6e1dd;
+  border-bottom: 1px solid rgba(30, 91, 69, 0.08);
 }
 
 #root > aside ul.index-list > li header.index-item {
-  background: #f2f4f6;
+  background: var(--ui-panel-strong);
+  color: var(--brand-green-strong);
   font-weight: 600;
   cursor: default;
-  height: 40px;
+  height: 42px;
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid rgba(30, 91, 69, 0.08);
 }
 
 .circle_progress_wrap {
@@ -451,7 +495,7 @@ body {
 }
 
 .frame {
-  stroke: #ccc;
+  stroke: #d7e4dd;
   stroke-width: 8px;
 }
 
@@ -462,7 +506,7 @@ body {
   width: 100%;
   height: 100%;
   stroke-width: 8px;
-  stroke: #ffcd00;
+  stroke: var(--brand-green);
   fill: none;
   stroke-dashoffset: calc(125.6 * (1 - var(--progress)));
   stroke-dasharray: 125.6;
@@ -481,7 +525,7 @@ body {
   align-items: center;
   justify-content: center;
   font-weight: bold;
-  color: #ffcd00;
+  color: var(--brand-green);
 }
 
 .autoplay-progress svg {
@@ -493,7 +537,7 @@ body {
   width: 100%;
   height: 100%;
   stroke-width: 4px;
-  stroke: #ffcd00;
+  stroke: var(--brand-green);
   fill: none;
   stroke-dashoffset: calc(125.6 * (1 - var(--progress)));
   stroke-dasharray: 125.6;
