@@ -317,6 +317,26 @@ function page_initialize() {
     return null;
   }
 
+  function hasActivePageMoreBelow(activePage, target) {
+    if (!activePage) return false;
+
+    var viewportBottom = window.innerHeight || document.documentElement.clientHeight;
+    var bodyEl = screenBody.get(0);
+    if (bodyEl) {
+      viewportBottom = Math.min(viewportBottom, bodyEl.getBoundingClientRect().bottom);
+    }
+
+    var pageRect = activePage.getBoundingClientRect();
+    if (pageRect.bottom > viewportBottom + 24) return true;
+
+    if (!target) return false;
+
+    var scrollTop = getScrollTop(target);
+    var clientHeight = getClientHeight(target);
+    var scrollHeight = getScrollHeight(target);
+    return scrollTop + clientHeight < scrollHeight - 24;
+  }
+
   function getScrollTop(target) {
     if (!target) return 0;
     if (
@@ -388,9 +408,10 @@ function page_initialize() {
   function updatePageMoreIndicator() {
     var indicator = ensurePageMoreIndicator();
     var target = getPageMoreScrollTarget();
+    var activePage = $("[data-page-id].active").first().get(0);
 
     if (
-      !target ||
+      !activePage ||
       $("#root").hasClass("menu-hide") ||
       (isIOSDevice && isIOSVideoFullscreen) ||
       document.fullscreenElement
@@ -399,10 +420,7 @@ function page_initialize() {
       return;
     }
 
-    var scrollTop = getScrollTop(target);
-    var clientHeight = getClientHeight(target);
-    var scrollHeight = getScrollHeight(target);
-    var hasMoreBelow = scrollTop + clientHeight < scrollHeight - 24;
+    var hasMoreBelow = hasActivePageMoreBelow(activePage, target);
 
     indicator.toggleClass("show", !!hasMoreBelow);
   }
