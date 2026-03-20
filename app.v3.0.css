@@ -126,17 +126,31 @@ body {
 }
 
 #screen_body > .swiper-button-prev:after,
-#screen_body > .swiper-button-next:after {
-  font-size: 18px;
-  color: #fff;
-  font-weight: 700;
-  letter-spacing: -0.08em;
+#screen_body > .swiper-button-next:after,
+#screen_body > .swiper-button-prev:before,
+#screen_body > .swiper-button-next:before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  border-top: 2px solid rgba(255, 255, 255, 0.96);
+  border-left: 2px solid rgba(255, 255, 255, 0.96);
+  opacity: 0.96;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
 }
 
 @media (max-width: 767px) {
   #screen_body > .swiper-button-prev:after,
-  #screen_body > .swiper-button-next:after {
-    font-size: 14px;
+  #screen_body > .swiper-button-next:after,
+  #screen_body > .swiper-button-prev:before,
+  #screen_body > .swiper-button-next:before {
+    width: 10px;
+    height: 10px;
+    margin-top: -5px;
   }
 }
 
@@ -167,14 +181,46 @@ body {
   );
 }
 
+#screen_body > .swiper-button-prev:before,
 #screen_body > .swiper-button-prev:after {
-  content: "<<";
-  margin-left: 8px;
+  transform: translateY(-50%) rotate(-45deg);
+}
+
+#screen_body > .swiper-button-next:before,
+#screen_body > .swiper-button-next:after {
+  transform: translateY(-50%) rotate(135deg);
+}
+
+#screen_body > .swiper-button-prev:before {
+  left: 18px;
+}
+
+#screen_body > .swiper-button-prev:after {
+  left: 26px;
+}
+
+#screen_body > .swiper-button-next:before {
+  right: 26px;
 }
 
 #screen_body > .swiper-button-next:after {
-  content: ">>";
-  margin-right: 8px;
+  right: 18px;
+}
+
+#screen_body > .swiper-button-prev:hover:before {
+  transform: translate(-2px, -50%) rotate(-45deg);
+}
+
+#screen_body > .swiper-button-prev:hover:after {
+  transform: translate(2px, -50%) rotate(-45deg);
+}
+
+#screen_body > .swiper-button-next:hover:before {
+  transform: translate(-2px, -50%) rotate(135deg);
+}
+
+#screen_body > .swiper-button-next:hover:after {
+  transform: translate(2px, -50%) rotate(135deg);
 }
 
 #screen_body.SWIPE .page-item {
