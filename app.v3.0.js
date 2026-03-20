@@ -273,6 +273,7 @@ function page_initialize() {
   var pageIdItems = $("[data-page-id]");
   var menus = $(".index-list [data-page-id]");
   var pageMoreIndicator = null;
+  var pageMoreIndicatorTimer = null;
 
   function ensurePageMoreIndicator() {
     if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
@@ -423,6 +424,22 @@ function page_initialize() {
     var hasMoreBelow = hasActivePageMoreBelow(activePage, target);
 
     indicator.toggleClass("show", !!hasMoreBelow);
+  }
+
+  function schedulePageMoreIndicatorUpdate() {
+    clearTimeout(pageMoreIndicatorTimer);
+    updatePageMoreIndicator();
+
+    requestAnimationFrame(function () {
+      updatePageMoreIndicator();
+      requestAnimationFrame(function () {
+        updatePageMoreIndicator();
+      });
+    });
+
+    pageMoreIndicatorTimer = setTimeout(function () {
+      updatePageMoreIndicator();
+    }, 120);
   }
 
   // 외부 HTML 모듈은 고유 콜백 이름을 전달해 iframe에서 부모 창으로 진행률을 올린다.
@@ -706,7 +723,7 @@ function page_initialize() {
 
   $(window).on("resize", onResize);
   onResize();
-  $(window).on("resize", updatePageMoreIndicator);
+  $(window).on("resize", schedulePageMoreIndicatorUpdate);
   ensurePageMoreIndicator();
 
   var _loc = ScormGet("cmi.location") || "0_0";
@@ -738,7 +755,7 @@ function page_initialize() {
     $("[data-page-id='" + index + "']").addClass("active");
     scrollActiveMenuIntoView();
     onScroll({ target: screenBody.get(0) });
-    updatePageMoreIndicator();
+    schedulePageMoreIndicatorUpdate();
     $("[data-page-id] video, [data-page-id] audio").each(function (i, el) {
       el.pause();
     });
@@ -949,7 +966,7 @@ function page_initialize() {
     nowPage.find("video").addClass("applyed");
     videoInit(nowPage);
     _scheduleTrimActivePageImages(nowPage, false);
-    setTimeout(updatePageMoreIndicator, 0);
+    schedulePageMoreIndicatorUpdate();
     /*
         try {
             if (nowPage.find("video").length) {
@@ -1084,7 +1101,7 @@ function page_initialize() {
         }
       }
       pageShowed(pageIds[realIndex]);
-      updatePageMoreIndicator();
+      schedulePageMoreIndicatorUpdate();
     });
     swiper.autoplay.pause();
     $(".autoplay-progress").hide();
@@ -1203,7 +1220,7 @@ function page_initialize() {
     if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
       window.refreshActivePageImages(false);
     }
-    updatePageMoreIndicator();
+    schedulePageMoreIndicatorUpdate();
   }
 
   // 스크롤 이벤트는 스로틀링해 과도한 계산을 줄인다.
@@ -1223,7 +1240,7 @@ function page_initialize() {
     onScrollThrottled,
     true /*Capture event*/,
   );
-  screenBody.on("scroll", updatePageMoreIndicator);
+  screenBody.on("scroll", schedulePageMoreIndicatorUpdate);
 
   const intervalTargets = [];
   // 재생 중인 미디어의 진행 시간을 주기적으로 저장한다.
@@ -1550,5 +1567,5 @@ function page_initialize() {
     return isExist;
   }
 
-  updatePageMoreIndicator();
+  schedulePageMoreIndicatorUpdate();
 }
