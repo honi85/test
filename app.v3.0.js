@@ -589,6 +589,42 @@ function page_initialize() {
     });
   }
 
+  function scrollActiveMenuIntoView(immediate) {
+    var activeMenu = menus.filter("[data-page-id='" + pageIndex + "']").get(0);
+    if (!activeMenu) return;
+
+    var menuScroller =
+      $(".index-list").get(0) ||
+      $("#root > .aside > ul").get(0) ||
+      activeMenu.parentElement;
+    if (!menuScroller) return;
+
+    var menuTop = activeMenu.offsetTop;
+    var menuBottom = menuTop + activeMenu.offsetHeight;
+    var viewTop = menuScroller.scrollTop;
+    var viewBottom = viewTop + menuScroller.clientHeight;
+    var padding = 20;
+
+    if (
+      menuTop >= viewTop + padding &&
+      menuBottom <= viewBottom - padding
+    ) {
+      return;
+    }
+
+    var nextTop =
+      menuTop - Math.max((menuScroller.clientHeight - activeMenu.offsetHeight) / 2, 0);
+
+    if (typeof menuScroller.scrollTo === "function") {
+      menuScroller.scrollTo({
+        top: Math.max(0, nextTop),
+        behavior: immediate ? "auto" : "smooth",
+      });
+    } else {
+      menuScroller.scrollTop = Math.max(0, nextTop);
+    }
+  }
+
   reloadProcess();
 
   // SCORM 값은 이전 기록과 비교해 바뀐 경우에만 다시 저장한다.
@@ -650,6 +686,9 @@ function page_initialize() {
   var _loc = ScormGet("cmi.location") || "0_0";
   var pageIndex = _loc || pageIdItems.attr("data-page-id");
   $("[data-page-id='" + pageIndex + "']").addClass("active");
+  setTimeout(function () {
+    scrollActiveMenuIntoView(true);
+  }, 0);
 
   // 현재 페이지를 바꾸고 마지막 위치를 SCORM에 저장한다.
   function setPageIndex(index) {
@@ -671,6 +710,7 @@ function page_initialize() {
     pageIndex = index;
     pageIdItems.removeClass("active");
     $("[data-page-id='" + index + "']").addClass("active");
+    scrollActiveMenuIntoView();
     onScroll({ target: screenBody.get(0) });
     updatePageMoreIndicator();
     $("[data-page-id] video, [data-page-id] audio").each(function (i, el) {
