@@ -270,51 +270,6 @@ function page_initialize() {
   function ensurePageMoreIndicator() {
     if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
 
-    if (!$("#page_more_indicator_style").length) {
-      $("head").append(
-        '<style id="page_more_indicator_style">' +
-          "#page_more_indicator{" +
-          "position:fixed;" +
-          "left:50%;" +
-          "bottom:20px;" +
-          "transform:translateX(-50%);" +
-          "width:52px;" +
-          "height:52px;" +
-          "border:0;" +
-          "border-radius:999px;" +
-          "display:flex;" +
-          "align-items:center;" +
-          "justify-content:center;" +
-          "background:rgba(17,24,39,.78);" +
-          "box-shadow:0 10px 24px rgba(15,23,42,.22);" +
-          "color:#fff;" +
-          "cursor:pointer;" +
-          "z-index:1200;" +
-          "opacity:0;" +
-          "pointer-events:none;" +
-          "transition:opacity .2s ease, transform .2s ease;" +
-          "}" +
-          "#page_more_indicator svg{" +
-          "width:22px;" +
-          "height:22px;" +
-          "animation:pageMoreBounce 1.2s ease-in-out infinite;" +
-          "}" +
-          "#page_more_indicator.show{" +
-          "opacity:1;" +
-          "pointer-events:auto;" +
-          "transform:translateX(-50%) translateY(0);" +
-          "}" +
-          "#page_more_indicator:not(.show){" +
-          "transform:translateX(-50%) translateY(8px);" +
-          "}" +
-          "@keyframes pageMoreBounce{" +
-          "0%,100%{transform:translateY(0);}" +
-          "50%{transform:translateY(4px);}" +
-          "}" +
-          "</style>",
-      );
-    }
-
     pageMoreIndicator = $(
       '<button id="page_more_indicator" type="button" aria-label="아래 학습 내용 더 보기">' +
         '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
@@ -324,23 +279,111 @@ function page_initialize() {
     );
 
     pageMoreIndicator.on("click", function () {
-      var body = screenBody.get(0);
-      var nextTop = body.scrollTop + Math.max(body.clientHeight * 0.7, 240);
-      body.scrollTo({ top: nextTop, behavior: "smooth" });
+      var target = getPageMoreScrollTarget();
+      if (!target) return;
+
+      var currentTop = getScrollTop(target);
+      var viewportHeight = getClientHeight(target);
+      var nextTop = currentTop + Math.max(viewportHeight * 0.7, 240);
+      scrollToTop(target, nextTop);
     });
 
     $("body").append(pageMoreIndicator);
     return pageMoreIndicator;
   }
 
+  function isScrollableElement(el) {
+    if (!el) return false;
+    return el.scrollHeight - el.clientHeight > 16;
+  }
+
+  function getPageMoreScrollTarget() {
+    var activePage = $("[data-page-id].active").first().get(0);
+    if (activePage && isScrollableElement(activePage)) return activePage;
+
+    var bodyEl = screenBody.get(0);
+    if (bodyEl && isScrollableElement(bodyEl)) return bodyEl;
+
+    var docEl = document.scrollingElement || document.documentElement;
+    if (docEl && isScrollableElement(docEl)) return docEl;
+
+    return null;
+  }
+
+  function getScrollTop(target) {
+    if (!target) return 0;
+    if (
+      target === window ||
+      target === document ||
+      target === document.body ||
+      target === document.documentElement ||
+      target === document.scrollingElement
+    ) {
+      return window.pageYOffset || document.documentElement.scrollTop || 0;
+    }
+    return target.scrollTop || 0;
+  }
+
+  function getClientHeight(target) {
+    if (!target) return window.innerHeight;
+    if (
+      target === window ||
+      target === document ||
+      target === document.body ||
+      target === document.documentElement ||
+      target === document.scrollingElement
+    ) {
+      return window.innerHeight;
+    }
+    return target.clientHeight || window.innerHeight;
+  }
+
+  function getScrollHeight(target) {
+    if (!target) return 0;
+    if (
+      target === window ||
+      target === document ||
+      target === document.body ||
+      target === document.documentElement ||
+      target === document.scrollingElement
+    ) {
+      var doc = document.documentElement;
+      var body = document.body;
+      return Math.max(
+        doc ? doc.scrollHeight : 0,
+        body ? body.scrollHeight : 0,
+        document.scrollingElement ? document.scrollingElement.scrollHeight : 0,
+      );
+    }
+    return target.scrollHeight || 0;
+  }
+
+  function scrollToTop(target, top) {
+    if (!target) return;
+    if (
+      target === window ||
+      target === document ||
+      target === document.body ||
+      target === document.documentElement ||
+      target === document.scrollingElement
+    ) {
+      window.scrollTo({ top: top, behavior: "smooth" });
+      return;
+    }
+
+    if (typeof target.scrollTo === "function") {
+      target.scrollTo({ top: top, behavior: "smooth" });
+    } else {
+      target.scrollTop = top;
+    }
+  }
+
   function updatePageMoreIndicator() {
     var indicator = ensurePageMoreIndicator();
-    var body = screenBody.get(0);
-    var activePage = $("[data-page-id].active").first().get(0);
+    var target = getPageMoreScrollTarget();
 
     if (
-      !body ||
-      !activePage ||
+      !target ||
       $("#root").hasClass("menu-hide") ||
       (isIOSDevice && isIOSVideoFullscreen) ||
       document.fullscreenElement
@@ -349,12 +392,10 @@ function page_initialize() {
       return;
     }
 
-    var bodyRect = body.getBoundingClientRect();
-    var pageRect = activePage.getBoundingClientRect();
-    var remainingBottom = pageRect.bottom - bodyRect.bottom;
-    var hasMoreBelow =
-      remainingBottom > 32 &&
-      body.scrollTop + body.clientHeight < body.scrollHeight - 16;
+    var scrollTop = getScrollTop(target);
+    var clientHeight = getClientHeight(target);
+    var scrollHeight = getScrollHeight(target);
+    var hasMoreBelow = scrollTop + clientHeight < scrollHeight - 24;
 
     indicator.toggleClass("show", !!hasMoreBelow);
   }
