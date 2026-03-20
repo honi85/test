@@ -265,6 +265,99 @@ function page_initialize() {
   var screenBody = $("#screen_body");
   var pageIdItems = $("[data-page-id]");
   var menus = $(".index-list [data-page-id]");
+  var pageMoreIndicator = null;
+
+  function ensurePageMoreIndicator() {
+    if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
+
+    if (!$("#page_more_indicator_style").length) {
+      $("head").append(
+        '<style id="page_more_indicator_style">' +
+          "#page_more_indicator{" +
+          "position:fixed;" +
+          "left:50%;" +
+          "bottom:20px;" +
+          "transform:translateX(-50%);" +
+          "width:52px;" +
+          "height:52px;" +
+          "border:0;" +
+          "border-radius:999px;" +
+          "display:flex;" +
+          "align-items:center;" +
+          "justify-content:center;" +
+          "background:rgba(17,24,39,.78);" +
+          "box-shadow:0 10px 24px rgba(15,23,42,.22);" +
+          "color:#fff;" +
+          "cursor:pointer;" +
+          "z-index:1200;" +
+          "opacity:0;" +
+          "pointer-events:none;" +
+          "transition:opacity .2s ease, transform .2s ease;" +
+          "}" +
+          "#page_more_indicator svg{" +
+          "width:22px;" +
+          "height:22px;" +
+          "animation:pageMoreBounce 1.2s ease-in-out infinite;" +
+          "}" +
+          "#page_more_indicator.show{" +
+          "opacity:1;" +
+          "pointer-events:auto;" +
+          "transform:translateX(-50%) translateY(0);" +
+          "}" +
+          "#page_more_indicator:not(.show){" +
+          "transform:translateX(-50%) translateY(8px);" +
+          "}" +
+          "@keyframes pageMoreBounce{" +
+          "0%,100%{transform:translateY(0);}" +
+          "50%{transform:translateY(4px);}" +
+          "}" +
+          "</style>",
+      );
+    }
+
+    pageMoreIndicator = $(
+      '<button id="page_more_indicator" type="button" aria-label="아래 학습 내용 더 보기">' +
+        '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+        '<path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>' +
+        "</svg>" +
+        "</button>",
+    );
+
+    pageMoreIndicator.on("click", function () {
+      var body = screenBody.get(0);
+      var nextTop = body.scrollTop + Math.max(body.clientHeight * 0.7, 240);
+      body.scrollTo({ top: nextTop, behavior: "smooth" });
+    });
+
+    $("body").append(pageMoreIndicator);
+    return pageMoreIndicator;
+  }
+
+  function updatePageMoreIndicator() {
+    var indicator = ensurePageMoreIndicator();
+    var body = screenBody.get(0);
+    var activePage = $("[data-page-id].active").first().get(0);
+
+    if (
+      !body ||
+      !activePage ||
+      $("#root").hasClass("menu-hide") ||
+      (isIOSDevice && isIOSVideoFullscreen) ||
+      document.fullscreenElement
+    ) {
+      indicator.removeClass("show");
+      return;
+    }
+
+    var bodyRect = body.getBoundingClientRect();
+    var pageRect = activePage.getBoundingClientRect();
+    var remainingBottom = pageRect.bottom - bodyRect.bottom;
+    var hasMoreBelow =
+      remainingBottom > 32 &&
+      body.scrollTop + body.clientHeight < body.scrollHeight - 16;
+
+    indicator.toggleClass("show", !!hasMoreBelow);
+  }
 
   // 외부 HTML 모듈은 고유 콜백 이름을 전달해 iframe에서 부모 창으로 진행률을 올린다.
   $("[data-html-src]").each(function (i, el) {
@@ -510,6 +603,8 @@ function page_initialize() {
 
   $(window).on("resize", onResize);
   onResize();
+  $(window).on("resize", updatePageMoreIndicator);
+  ensurePageMoreIndicator();
 
   var _loc = ScormGet("cmi.location") || "0_0";
   var pageIndex = _loc || pageIdItems.attr("data-page-id");
@@ -536,6 +631,7 @@ function page_initialize() {
     pageIdItems.removeClass("active");
     $("[data-page-id='" + index + "']").addClass("active");
     onScroll({ target: screenBody.get(0) });
+    updatePageMoreIndicator();
     $("[data-page-id] video, [data-page-id] audio").each(function (i, el) {
       el.pause();
     });
@@ -666,6 +762,7 @@ function page_initialize() {
     });
     nowPage.find("video").addClass("applyed");
     videoInit(nowPage);
+    setTimeout(updatePageMoreIndicator, 0);
     /*
         try {
             if (nowPage.find("video").length) {
@@ -790,6 +887,7 @@ function page_initialize() {
         }
       }
       pageShowed(pageIds[realIndex]);
+      updatePageMoreIndicator();
     });
     swiper.autoplay.pause();
     $(".autoplay-progress").hide();
@@ -905,6 +1003,7 @@ function page_initialize() {
         if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
       }
     });
+    updatePageMoreIndicator();
   }
 
   // 스크롤 이벤트는 스로틀링해 과도한 계산을 줄인다.
@@ -924,6 +1023,7 @@ function page_initialize() {
     onScrollThrottled,
     true /*Capture event*/,
   );
+  screenBody.on("scroll", updatePageMoreIndicator);
 
   const intervalTargets = [];
   // 재생 중인 미디어의 진행 시간을 주기적으로 저장한다.
@@ -1241,4 +1341,6 @@ function page_initialize() {
 
     return isExist;
   }
+
+  updatePageMoreIndicator();
 }
