@@ -139,6 +139,7 @@ var isIOSVideoFullscreen = false;
 var isIOSRotating = false;
 var iosFullscreenSyncTimer = null;
 var iosRotationTimer = null;
+window.refreshActivePageImages = null;
 try {
   isNextParents = !!window.parent && !!window.parent.nextChangeOnLesson;
   isPrevParents = !!window.parent && !!window.parent.prevChangeONLesson;
@@ -218,6 +219,9 @@ window.addEventListener("orientationchange", function () {
   iosRotationTimer = setTimeout(function () {
     isIOSRotating = false;
     setIOSFullscreenUI(isIOSVideoFullscreen);
+    if (typeof window.refreshActivePageImages === "function") {
+      window.refreshActivePageImages(true);
+    }
   }, 700);
 });
 
@@ -677,6 +681,9 @@ function page_initialize() {
     w = Math.min(w, 1040) - 40;
     $("iframe.youtube").attr("height", w * (3 / 5));
     $("iframe.docs").attr("height", w);
+    if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
+      window.refreshActivePageImages(false);
+    }
   }
 
   $(window).on("resize", onResize);
@@ -733,6 +740,9 @@ function page_initialize() {
   // iOS Safari에서는 이 과정이 오히려 메모리 피크를 만들 수 있어 수행하지 않는다.
   // SVG, GIF, base64 이미지는 제외한다.
   var _IMG_MAX_PX = 1920;
+  var _pageImageObserver = null;
+  var _pageImageTrimTimer = null;
+  var _pageImageRefreshTimer = null;
   function _resizeImageIfOversized(img) {
     if (img.getAttribute("data-resized")) return;
     if (isIOSDevice) return;
@@ -782,32 +792,106 @@ function page_initialize() {
     }
   }
 
+  function _loadPageImage(img) {
+    if (!img || !img.getAttribute("data-src")) return;
+    var $img = $(img);
+    $img.attr("src", $img.attr("data-src")).removeAttr("data-src");
+    _resizeImageIfOversized(img);
+  }
+
+  function _disconnectPageImageObserver() {
+    if (_pageImageObserver) {
+      _pageImageObserver.disconnect();
+      _pageImageObserver = null;
+    }
+  }
+
+  function _observePageImages(nowPage) {
+    _disconnectPageImageObserver();
+    if (!isIOSDevice || !("IntersectionObserver" in window)) return;
+
+    var imgs = nowPage.find("img[data-src]").toArray();
+    if (!imgs.length) return;
+
+    _pageImageObserver = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (!entry.isIntersecting) return;
+          _loadPageImage(entry.target);
+          if (_pageImageObserver) {
+            _pageImageObserver.unobserve(entry.target);
+          }
+        });
+      },
+      {
+        root: null,
+        rootMargin: "180px 0px 260px 0px",
+        threshold: 0.01,
+      },
+    );
+
+    imgs.forEach(function (img, index) {
+      if (index < 2) {
+        _loadPageImage(img);
+        return;
+      }
+      _pageImageObserver.observe(img);
+    });
+  }
+
+  function _trimActivePageImages(nowPage, forceReset) {
+    if (!isIOSDevice || !nowPage || !nowPage.length) return;
+
+    var viewportBottom =
+      window.innerHeight || document.documentElement.clientHeight || 0;
+    var keepMargin = forceReset ? 120 : Math.max(viewportBottom * 1.2, 420);
+
+    nowPage.find("img").each(function () {
+      var img = this;
+      var rect = img.getBoundingClientRect();
+      var originSrc = img.getAttribute("data-origin-src") || img.getAttribute("src");
+      if (!originSrc || originSrc.startsWith("data:")) return;
+
+      var isFar =
+        rect.bottom < 0 - keepMargin || rect.top > viewportBottom + keepMargin;
+
+      if (forceReset || isFar) {
+        if (img.getAttribute("src")) {
+          $(img)
+            .attr("data-src", originSrc)
+            .attr("data-origin-src", originSrc)
+            .removeAttr("src")
+            .removeAttr("data-resized");
+        }
+        if (_pageImageObserver) {
+          _pageImageObserver.unobserve(img);
+        }
+      }
+    });
+
+    _observePageImages(nowPage);
+  }
+
+  function _scheduleTrimActivePageImages(nowPage, forceReset) {
+    if (!isIOSDevice || !nowPage || !nowPage.length) return;
+    clearTimeout(_pageImageTrimTimer);
+    _pageImageTrimTimer = setTimeout(function () {
+      _trimActivePageImages(nowPage, !!forceReset);
+    }, forceReset ? 60 : 120);
+  }
+
   // 현재 페이지의 이미지만 복원한다. iOS에서는 배치 단위로 나눠 붙인다.
   function _restorePageImages(nowPage) {
     var imgs = nowPage.find("img[data-src]").toArray();
     if (!isIOSDevice) {
       imgs.forEach(function (img) {
-        var $img = $(img);
-        $img.attr("src", $img.attr("data-src")).removeAttr("data-src");
-        _resizeImageIfOversized(img);
+        _loadPageImage(img);
       });
       return;
     }
 
-    var batchSize = 2;
-    var index = 0;
-    function loadBatch() {
-      var end = Math.min(index + batchSize, imgs.length);
-      for (; index < end; index++) {
-        var img = imgs[index];
-        var $img = $(img);
-        $img.attr("src", $img.attr("data-src")).removeAttr("data-src");
-      }
-      if (index < imgs.length) {
-        requestAnimationFrame(loadBatch);
-      }
-    }
-    loadBatch();
+    _observePageImages(nowPage);
+    _scheduleTrimActivePageImages(nowPage, false);
   }
 
   // 현재 페이지가 아닌 이미지들은 다시 data-src로 돌려 메모리를 해제한다.
@@ -846,6 +930,7 @@ function page_initialize() {
     });
     nowPage.find("video").addClass("applyed");
     videoInit(nowPage);
+    _scheduleTrimActivePageImages(nowPage, false);
     setTimeout(updatePageMoreIndicator, 0);
     /*
         try {
@@ -867,6 +952,16 @@ function page_initialize() {
         }
          */
   }
+
+  window.refreshActivePageImages = function (forceReset) {
+    if (!isIOSDevice) return;
+    clearTimeout(_pageImageRefreshTimer);
+    _pageImageRefreshTimer = setTimeout(function () {
+      var activePage = $("[data-page-id='" + pageIndex + "']");
+      if (!activePage.length) return;
+      _trimActivePageImages(activePage, !!forceReset);
+    }, forceReset ? 180 : 80);
+  };
 
   // 화면이 Swiper 모드면 슬라이드 이동과 페이지 진도를 연동한다.
   if ($("#screen_body.SWIPE").length) {
@@ -1087,6 +1182,9 @@ function page_initialize() {
         if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
       }
     });
+    if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
+      window.refreshActivePageImages(false);
+    }
     updatePageMoreIndicator();
   }
 
