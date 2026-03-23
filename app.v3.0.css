@@ -1036,11 +1036,12 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 320vw;
-  height: 320vh;
+  width: 240vw;
+  height: 240vh;
   display: flex;
   flex-direction: column;
-  justify-content: space-evenly;
+  justify-content: center;
+  gap: 22px;
   transform: translate(-50%, -50%) rotate(-45deg);
   transform-origin: center;
   opacity: 0.1;
@@ -1048,19 +1049,26 @@ body {
 
 .sb-watermark-row {
   width: 100%;
-  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  gap: 48px;
   white-space: nowrap;
   line-height: 1;
-  padding: 10px 0;
 }
 
 .sb-watermark-row span {
-  display: inline-block;
-  min-width: 420%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 260px;
   color: #333;
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.18em;
+}
+
+.sb-watermark-row span.is-offset {
+  transform: translateX(154px);
 }
 
 #watermark > div.no1 {

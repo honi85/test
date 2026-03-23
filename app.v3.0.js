@@ -112,17 +112,28 @@ function getWatermarkHtml() {
 }
 
 function buildStarbucksWatermarkHtml(text) {
-  var rows = "";
-  var repeatedText = new Array(16).join(text + "          ");
+  var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1920;
+  var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1080;
+  var cellWidth = 260;
+  var cellHeight = 120;
+  var columns = Math.max(8, Math.ceil((viewportWidth * 2.4) / cellWidth));
+  var rows = Math.max(10, Math.ceil((viewportHeight * 2.4) / cellHeight));
+  var html = "";
 
-  for (var i = 0; i < 22; i++) {
-    rows +=
-      '<div class="sb-watermark-row"><span>' +
-      repeatedText +
-      "</span></div>";
+  for (var row = 0; row < rows; row++) {
+    html += '<div class="sb-watermark-row">';
+    for (var column = 0; column < columns; column++) {
+      html +=
+        '<span class="sb-watermark-cell' +
+        (row % 2 === 1 ? ' is-offset' : '') +
+        '">' +
+        text +
+        "</span>";
+    }
+    html += "</div>";
   }
 
-  return '<div class="sb-watermark-grid">' + rows + "</div>";
+  return '<div class="sb-watermark-grid">' + html + "</div>";
 }
 
 function refreshWatermarkText() {
@@ -354,6 +365,9 @@ const handleResize = () => {
   if (!document.fullscreenElement) {
     $(".fullscreen-el").removeClass("fullscreen-el");
     $("#root").removeClass("menu-hide");
+  }
+  if (base && base.watermark && isStarbucksWatermark()) {
+    refreshWatermarkText();
   }
 };
 window.addEventListener("resize", handleResize);
