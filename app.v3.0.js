@@ -159,6 +159,34 @@ function setIOSFullscreenUI(isFullscreen) {
     $(".swiper-button-next").css("visibility", "visible");
     $("#watermark").css("visibility", "visible");
   }
+  updateSwipeNavigationVisibility();
+}
+
+function updateSwipeNavigationVisibility() {
+  var prevButton = $("#screen_body > .swiper-button-prev");
+  var nextButton = $("#screen_body > .swiper-button-next");
+  if (!prevButton.length && !nextButton.length) return;
+
+  if (isIOSVideoFullscreen) {
+    prevButton.css("visibility", "hidden");
+    nextButton.css("visibility", "hidden");
+    return;
+  }
+
+  var currentIndex = 0;
+  if (window.swiper && typeof window.swiper.realIndex === "number") {
+    currentIndex = window.swiper.realIndex;
+  } else {
+    var activePageId = $("[data-page-id].active").first().attr("data-page-id");
+    var activeIndex = pageIds.indexOf(activePageId);
+    currentIndex = activeIndex > -1 ? activeIndex : 0;
+  }
+
+  prevButton.css("visibility", currentIndex <= 0 ? "hidden" : "visible");
+  nextButton.css(
+    "visibility",
+    currentIndex >= pageIds.length - 1 ? "hidden" : "visible",
+  );
 }
 
 function syncIOSVideoFullscreen(isFullscreen) {
@@ -753,6 +781,7 @@ function page_initialize() {
     pageIndex = index;
     pageIdItems.removeClass("active");
     $("[data-page-id='" + index + "']").addClass("active");
+    updateSwipeNavigationVisibility();
     scrollActiveMenuIntoView();
     onScroll({ target: screenBody.get(0) });
     schedulePageMoreIndicatorUpdate();
@@ -1069,6 +1098,7 @@ function page_initialize() {
 
     swiper = new Swiper("#screen_body.SWIPE", init);
     window.swiper = swiper;
+    updateSwipeNavigationVisibility();
 
     swiper.on("slideChange", function ({ realIndex, isEnd, previousIndex }) {
       if (autoPlay && (process[realIndex] !== 1 || isEnd)) {
@@ -1101,6 +1131,7 @@ function page_initialize() {
         }
       }
       pageShowed(pageIds[realIndex]);
+      updateSwipeNavigationVisibility();
       schedulePageMoreIndicatorUpdate();
     });
     swiper.autoplay.pause();
@@ -1124,6 +1155,7 @@ function page_initialize() {
   } else {
     setPageIndex(pageIndex);
   }
+  updateSwipeNavigationVisibility();
 
   // 내부 슬라이드형 모듈도 별도 진행률로 저장한다.
   $(".module-slide.active").each(function (ix, el) {
