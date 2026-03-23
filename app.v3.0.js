@@ -860,7 +860,7 @@ function page_initialize() {
       if ($(el).find(".bar").get(0)) {
         $(el).find(".bar").get(0).style.setProperty("--progress", percent);
       }
-      if (String(percent) === "1") $(el).addClass("finish");
+      $(el).toggleClass("finish", isPageComplete(pageIds[i]));
     });
   }
 
