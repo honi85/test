@@ -1032,7 +1032,7 @@ body {
   transform: none;
 }
 
-.sb-watermark-grid {
+#watermark.sb-watermark > .sb-watermark-grid {
   position: absolute;
   left: 50%;
   top: 50%;
