@@ -1036,8 +1036,6 @@ body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 240vw;
-  height: 240vh;
   display: flex;
   flex-direction: column;
   justify-content: center;

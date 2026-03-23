@@ -116,8 +116,10 @@ function buildStarbucksWatermarkHtml(text) {
   var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1080;
   var cellWidth = 260;
   var cellHeight = 120;
-  var columns = Math.max(8, Math.ceil((viewportWidth * 2.4) / cellWidth));
-  var rows = Math.max(10, Math.ceil((viewportHeight * 2.4) / cellHeight));
+  var diagonal = Math.sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+  var gridSize = Math.ceil(diagonal * 2.4);
+  var columns = Math.max(10, Math.ceil(gridSize / cellWidth));
+  var rows = Math.max(12, Math.ceil(gridSize / cellHeight));
   var html = "";
 
   for (var row = 0; row < rows; row++) {
@@ -133,7 +135,15 @@ function buildStarbucksWatermarkHtml(text) {
     html += "</div>";
   }
 
-  return '<div class="sb-watermark-grid">' + html + "</div>";
+  return (
+    '<div class="sb-watermark-grid" style="width:' +
+    gridSize +
+    "px;height:" +
+    gridSize +
+    'px;">' +
+    html +
+    "</div>"
+  );
 }
 
 function refreshWatermarkText() {
