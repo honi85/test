@@ -766,7 +766,7 @@ function page_initialize() {
     // 저장은 즉시 연속 호출하지 않고 잠시 모아서 처리한다.
     _saveSuspendDataDebounced();
     renderModuleExtra(mid);
-    if (window.swiper && window.swiper.allowSlideNext)
+    if (window.swiper)
       window.swiper.allowSlideNext = !isParentFunc("next") && isNextAllow();
   }
 
@@ -1302,13 +1302,23 @@ function page_initialize() {
     updateSwipeNavigationVisibility();
 
     swiper.on("slideChange", function ({ realIndex, isEnd, previousIndex }) {
+      var nextPageId = pageIds[realIndex];
+      if (!canMoveToPage(nextPageId)) {
+        swiper.allowSlideNext = false;
+        setTimeout(function () {
+          swiper.slideTo(previousIndex);
+        }, 0);
+        alert(NOT_ALLOWED_NEXT_MSG);
+        return;
+      }
+
       if (autoPlay && (process[realIndex] !== 1 || isEnd)) {
         swiper.autoplay.pause(false, true);
         $(".autoplay-progress").hide();
       } else {
         $(".autoplay-progress").show();
       }
-      setPageIndex(pageIds[realIndex]);
+      setPageIndex(nextPageId);
       setProcess(realIndex, process[realIndex]);
       var prevPage = $("[data-page-id='" + pageIds[previousIndex] + "']");
       if (prevPage.find("video,audio")) {
