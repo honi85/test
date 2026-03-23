@@ -117,9 +117,9 @@ function buildStarbucksWatermarkHtml(text) {
   var cellWidth = 260;
   var cellHeight = 120;
   var diagonal = Math.sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
-  var gridSize = Math.ceil(diagonal * 2.4);
-  var columns = Math.max(10, Math.ceil(gridSize / cellWidth));
-  var rows = Math.max(12, Math.ceil(gridSize / cellHeight));
+  var gridSize = Math.ceil(diagonal * 2.8);
+  var columns = Math.max(12, Math.ceil(gridSize / cellWidth));
+  var rows = Math.max(14, Math.ceil(gridSize / cellHeight));
   var html = "";
 
   for (var row = 0; row < rows; row++) {
