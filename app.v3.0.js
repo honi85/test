@@ -1430,13 +1430,15 @@ function page_initialize() {
 
   // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
   function onScroll(e) {
-    $(".page-item.active .module-item").each(function (ix, el) {
-      var p = el.getBoundingClientRect();
-      if (p.y + p.height < window.innerHeight + 30) {
-        var mid = $(el).attr("data-mod-id");
-        if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
-      }
-    });
+    if (e && e.type === "scroll") {
+      $(".page-item.active .module-item").each(function (ix, el) {
+        var p = el.getBoundingClientRect();
+        if (p.y + p.height < window.innerHeight + 30) {
+          var mid = $(el).attr("data-mod-id");
+          if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
+        }
+      });
+    }
     if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
       window.refreshActivePageImages(false);
     }
