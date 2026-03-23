@@ -374,7 +374,7 @@ body {
 
 #root > .aside > button {
   position: absolute;
-  left: -52px;
+  left: -56px;
   top: 16px;
   width: 40px;
   height: 40px;
@@ -1039,7 +1039,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 22px;
+  gap: 55px;
   transform: translate(-50%, -50%) rotate(-45deg);
   transform-origin: center;
   opacity: 0.1;

@@ -33,11 +33,8 @@ for (var k of Object.keys(extraResData)) {
 
 var moduleExtra = JSON.parse(ScormGet("cmi.suspend_data") || "{}");
 var uname = ScormGet("cmi.learner_name");
-var learnerId =
-  ScormGet("cmi.learner_id") ||
-  ScormGet("cmi.core.student_id") ||
-  ScormGet("cmi.student_id") ||
-  "";
+var learnerId = ScormGet("cmi.learner_id") || "";
+var learnerComp = ScormGet("cmi.learner_comp") || "";
 
 var pageIds = [];
 var moduleIds = [];
@@ -81,7 +78,7 @@ function getCurrentTimeCompactString() {
 }
 
 function isStarbucksWatermark() {
-  return !!base && base.comp === "EE0";
+  return learnerComp === "EE0";
 }
 
 function ensureWatermarkContainer() {
@@ -95,7 +92,14 @@ function ensureWatermarkContainer() {
 
 function getWatermarkTextPlain() {
   if (isStarbucksWatermark()) {
-    return [learnerId || "[사번없음]", uname || "[미리보기]", getCurrentTimeCompactString()]
+    const maskedUname = uname
+      ? uname[0] + "*".repeat(uname.length - 2) + uname[uname.length - 1]
+      : "[미리보기]";
+    return [
+      learnerId || "[사번없음]",
+      maskedUname || "[미리보기]",
+      getCurrentTimeCompactString(),
+    ]
       .join(" ")
       .trim();
   }
@@ -112,14 +116,18 @@ function getWatermarkHtml() {
 }
 
 function buildStarbucksWatermarkHtml(text) {
-  var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1920;
-  var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 1080;
+  var viewportWidth =
+    window.innerWidth || document.documentElement.clientWidth || 1920;
+  var viewportHeight =
+    window.innerHeight || document.documentElement.clientHeight || 1080;
   var cellWidth = 260;
   var cellHeight = 120;
-  var diagonal = Math.sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight);
+  var diagonal = Math.sqrt(
+    viewportWidth * viewportWidth + viewportHeight * viewportHeight,
+  );
   var gridSize = Math.ceil(diagonal * 2.8);
   var columns = Math.max(12, Math.ceil(gridSize / cellWidth));
-  var rows = Math.max(14, Math.ceil(gridSize / cellHeight));
+  var rows = Math.max(16, Math.ceil(gridSize / cellHeight));
   var html = "";
 
   for (var row = 0; row < rows; row++) {
@@ -127,7 +135,7 @@ function buildStarbucksWatermarkHtml(text) {
     for (var column = 0; column < columns; column++) {
       html +=
         '<span class="sb-watermark-cell' +
-        (row % 2 === 1 ? ' is-offset' : '') +
+        (row % 2 === 1 ? " is-offset" : "") +
         '">' +
         text +
         "</span>";
@@ -157,9 +165,7 @@ function refreshWatermarkText() {
       .removeClass("default-watermark")
       .html(buildStarbucksWatermarkHtml(html));
   } else {
-    $watermark
-      .addClass("default-watermark")
-      .removeClass("sb-watermark");
+    $watermark.addClass("default-watermark").removeClass("sb-watermark");
     $watermark.find(".sb-watermark-grid").remove();
     if ($watermark.find("p").length === 0) {
       $watermark.html(
@@ -188,7 +194,7 @@ function startWatermarkRefresh() {
 
   refreshWatermarkText();
   // 분 단위 표기라서 30초마다 갱신해 시각 오차를 최소화한다.
-  watermarkRefreshTimer = setInterval(refreshWatermarkText, 30 * 1000);
+  // watermarkRefreshTimer = setInterval(refreshWatermarkText, 30 * 1000);
 }
 
 function setVideoWatermarkVisibility(isVisible) {
@@ -493,10 +499,14 @@ function page_initialize() {
   function hasActivePageMoreBelow(activePage, target) {
     if (!activePage) return false;
 
-    var viewportBottom = window.innerHeight || document.documentElement.clientHeight;
+    var viewportBottom =
+      window.innerHeight || document.documentElement.clientHeight;
     var bodyEl = screenBody.get(0);
     if (bodyEl) {
-      viewportBottom = Math.min(viewportBottom, bodyEl.getBoundingClientRect().bottom);
+      viewportBottom = Math.min(
+        viewportBottom,
+        bodyEl.getBoundingClientRect().bottom,
+      );
     }
 
     var pageRect = activePage.getBoundingClientRect();
@@ -620,13 +630,21 @@ function page_initialize() {
       pageMoreObserver = null;
     }
     if (pageMoreObservedPage) {
-      pageMoreObservedPage.removeEventListener("load", schedulePageMoreIndicatorUpdate, true);
+      pageMoreObservedPage.removeEventListener(
+        "load",
+        schedulePageMoreIndicatorUpdate,
+        true,
+      );
       pageMoreObservedPage = null;
     }
     if (!pageEl || !("MutationObserver" in window)) return;
 
     pageMoreObservedPage = pageEl;
-    pageMoreObservedPage.addEventListener("load", schedulePageMoreIndicatorUpdate, true);
+    pageMoreObservedPage.addEventListener(
+      "load",
+      schedulePageMoreIndicatorUpdate,
+      true,
+    );
     pageMoreObserver = new MutationObserver(function () {
       schedulePageMoreIndicatorUpdate();
     });
@@ -1088,7 +1106,8 @@ function page_initialize() {
     nowPage.find("img").each(function () {
       var img = this;
       var rect = img.getBoundingClientRect();
-      var originSrc = img.getAttribute("data-origin-src") || img.getAttribute("src");
+      var originSrc =
+        img.getAttribute("data-origin-src") || img.getAttribute("src");
       if (!originSrc || originSrc.startsWith("data:")) return;
 
       var isFar =
@@ -1114,9 +1133,12 @@ function page_initialize() {
   function _scheduleTrimActivePageImages(nowPage, forceReset) {
     if (!isIOSDevice || !nowPage || !nowPage.length) return;
     clearTimeout(_pageImageTrimTimer);
-    _pageImageTrimTimer = setTimeout(function () {
-      _trimActivePageImages(nowPage, !!forceReset);
-    }, forceReset ? 60 : 120);
+    _pageImageTrimTimer = setTimeout(
+      function () {
+        _trimActivePageImages(nowPage, !!forceReset);
+      },
+      forceReset ? 60 : 120,
+    );
   }
 
   // 현재 페이지의 이미지만 복원한다. iOS에서는 배치 단위로 나눠 붙인다.
@@ -1196,11 +1218,14 @@ function page_initialize() {
   window.refreshActivePageImages = function (forceReset) {
     if (!isIOSDevice) return;
     clearTimeout(_pageImageRefreshTimer);
-    _pageImageRefreshTimer = setTimeout(function () {
-      var activePage = $("[data-page-id='" + pageIndex + "']");
-      if (!activePage.length) return;
-      _trimActivePageImages(activePage, !!forceReset);
-    }, forceReset ? 180 : 80);
+    _pageImageRefreshTimer = setTimeout(
+      function () {
+        var activePage = $("[data-page-id='" + pageIndex + "']");
+        if (!activePage.length) return;
+        _trimActivePageImages(activePage, !!forceReset);
+      },
+      forceReset ? 180 : 80,
+    );
   };
 
   // 화면이 Swiper 모드면 슬라이드 이동과 페이지 진도를 연동한다.
