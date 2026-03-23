@@ -983,6 +983,11 @@ body {
   pointer-events: none;
 }
 
+#watermark.sb-watermark {
+  opacity: 1;
+  overflow: hidden;
+}
+
 #watermark > div {
   width: 33.3334%;
   height: 33.3334%;
@@ -998,6 +1003,47 @@ body {
   padding: 0;
   transform: rotate(-45deg) translateX(-50%);
   color: #ffae10;
+}
+
+#watermark.sb-watermark > div {
+  width: auto;
+  height: auto;
+  position: static;
+  display: block;
+}
+
+#watermark.sb-watermark > div > p {
+  transform: none;
+}
+
+.sb-watermark-grid {
+  position: absolute;
+  left: -35vw;
+  top: -35vh;
+  width: 170vw;
+  height: 170vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
+  transform: rotate(-45deg);
+  transform-origin: center;
+  opacity: 0.1;
+}
+
+.sb-watermark-row {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.sb-watermark-row span {
+  display: inline-block;
+  min-width: 220%;
+  color: #333;
+  font-size: clamp(18px, 1.8vw, 28px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
 }
 
 #watermark > div.no1 {

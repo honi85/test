@@ -1,17 +1,5 @@
 var ScormGet = undefined;
 var ScormSet = undefined;
-// 워터마크와 학습 기록에 사용할 현재 시각 문자열
-var date = new Date();
-var nowStr =
-  date.getFullYear() +
-  "." +
-  String(date.getMonth() + 1).padStart(2, "0") +
-  "." +
-  String(date.getDate()).padStart(2, "0") +
-  " " +
-  String(date.getHours()).padStart(2, "0") +
-  ":" +
-  String(date.getMinutes()).padStart(2, "0");
 // 운영 환경에서는 SCORM API를, 로컬 미리보기에서는 localStorage를 사용한다.
 if (
   !location.href.endsWith("/shared/index") &&
@@ -45,6 +33,11 @@ for (var k of Object.keys(extraResData)) {
 
 var moduleExtra = JSON.parse(ScormGet("cmi.suspend_data") || "{}");
 var uname = ScormGet("cmi.learner_name");
+var learnerId =
+  ScormGet("cmi.learner_id") ||
+  ScormGet("cmi.core.student_id") ||
+  ScormGet("cmi.student_id") ||
+  "";
 
 var pageIds = [];
 var moduleIds = [];
@@ -57,8 +50,131 @@ var swiper = undefined;
 var isSwipe = false;
 var autoPlay = undefined;
 var isIOSDevice = /iP(hone|ad|od)/i.test(navigator.userAgent);
+var watermarkRefreshTimer = null;
 
 const NOT_ALLOWED_NEXT_MSG = "현재 페이지 학습 완료 후 다음 학습이 가능합니다.";
+
+function getCurrentTimeString() {
+  var date = new Date();
+  return (
+    date.getFullYear() +
+    "." +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    "." +
+    String(date.getDate()).padStart(2, "0") +
+    " " +
+    String(date.getHours()).padStart(2, "0") +
+    ":" +
+    String(date.getMinutes()).padStart(2, "0")
+  );
+}
+
+function getCurrentTimeCompactString() {
+  var date = new Date();
+  return (
+    date.getFullYear() +
+    String(date.getMonth() + 1).padStart(2, "0") +
+    String(date.getDate()).padStart(2, "0") +
+    String(date.getHours()).padStart(2, "0") +
+    String(date.getMinutes()).padStart(2, "0")
+  );
+}
+
+function isStarbucksWatermark() {
+  return !!base && base.comp === "EE0";
+}
+
+function ensureWatermarkContainer() {
+  var $watermark = $("#watermark");
+  if ($watermark.length > 0) return $watermark;
+
+  $watermark = $('<div id="watermark" aria-hidden="true"></div>');
+  $("body").append($watermark);
+  return $watermark;
+}
+
+function getWatermarkTextPlain() {
+  if (isStarbucksWatermark()) {
+    return [learnerId || "[사번없음]", uname || "[미리보기]", getCurrentTimeCompactString()]
+      .join(" ")
+      .trim();
+  }
+
+  return (uname || "[미리보기]") + " " + getCurrentTimeString();
+}
+
+function getWatermarkHtml() {
+  if (isStarbucksWatermark()) {
+    return getWatermarkTextPlain();
+  }
+
+  return (uname || "[미리보기]") + "<br/>\n" + getCurrentTimeString();
+}
+
+function buildStarbucksWatermarkHtml(text) {
+  var rows = "";
+  var repeatedText = new Array(8).join(text + "    ");
+
+  for (var i = 0; i < 12; i++) {
+    rows +=
+      '<div class="sb-watermark-row"><span>' +
+      repeatedText +
+      "</span></div>";
+  }
+
+  return '<div class="sb-watermark-grid">' + rows + "</div>";
+}
+
+function refreshWatermarkText() {
+  if (!base || !base.watermark) return;
+
+  var $watermark = ensureWatermarkContainer();
+  var html = getWatermarkHtml();
+  if (isStarbucksWatermark()) {
+    $watermark
+      .addClass("sb-watermark")
+      .removeClass("default-watermark")
+      .html(buildStarbucksWatermarkHtml(html));
+  } else {
+    $watermark
+      .addClass("default-watermark")
+      .removeClass("sb-watermark");
+    $watermark.find(".sb-watermark-grid").remove();
+    if ($watermark.find("p").length === 0) {
+      $watermark.html(
+        '<div class="no1"><p></p></div><div class="no2"><p></p></div><div class="no3"><p></p></div>',
+      );
+    }
+    if ($watermark.find("p").length > 0) {
+      $watermark.find("p").html(html);
+    }
+  }
+
+  if (!isStarbucksWatermark()) {
+    for (var i = 0; i < 3; i++) {
+      var $wm = $("#vwm_unique_" + i);
+      if ($wm.length > 0) {
+        $wm.html(html);
+      }
+    }
+  }
+}
+
+function startWatermarkRefresh() {
+  if (watermarkRefreshTimer) {
+    clearInterval(watermarkRefreshTimer);
+  }
+
+  refreshWatermarkText();
+  // 분 단위 표기라서 30초마다 갱신해 시각 오차를 최소화한다.
+  watermarkRefreshTimer = setInterval(refreshWatermarkText, 30 * 1000);
+}
+
+function setVideoWatermarkVisibility(isVisible) {
+  for (var i = 0; i < 3; i++) {
+    $("#vwm_unique_" + i).css("visibility", isVisible ? "visible" : "hidden");
+  }
+}
 
 var _c = $("#details").val();
 // 학습 본문 HTML을 불러온 뒤 화면/진도 초기화를 시작한다.
@@ -153,11 +269,13 @@ function setIOSFullscreenUI(isFullscreen) {
     $(".swiper-button-prev").css("visibility", "hidden");
     $(".swiper-button-next").css("visibility", "hidden");
     $("#watermark").css("visibility", "hidden");
+    setVideoWatermarkVisibility(false);
   } else {
     $("#screen_menu button").css("visibility", "visible");
     $(".swiper-button-prev").css("visibility", "visible");
     $(".swiper-button-next").css("visibility", "visible");
     $("#watermark").css("visibility", "visible");
+    setVideoWatermarkVisibility(true);
   }
   updateSwipeNavigationVisibility();
 }
@@ -1489,18 +1607,22 @@ function page_initialize() {
               });
             }
 
-            // iPhone 전체화면/회전 시에는 오버레이 부담을 줄이기 위해 워터마크를 생략한다.
-            if (base.watermark && !isIOSDevice) {
+            // 워터마크는 기본적으로 표시하고, iOS 전체화면 전환 시에만 숨긴다.
+            if (base.watermark && !isStarbucksWatermark()) {
               for (var i = 0; i < 3; i++) {
                 vjs.dynamicWatermark({
                   elementId: "vwm_unique_" + i,
                   changeDuration: 100 * 1000,
-                  watermarkText: (uname || "[미리보기]") + "<br />" + nowStr,
+                  watermarkText: getWatermarkHtml(),
                   cssText:
                     "font-size: 1rem; " +
                     "z-index: 9999; " +
                     "position: absolute; left: 0px ",
                 });
+              }
+              refreshWatermarkText();
+              if (isIOSDevice && isIOSVideoFullscreen) {
+                setVideoWatermarkVisibility(false);
               }
             }
           }, 0);
@@ -1577,12 +1699,7 @@ function page_initialize() {
 
   // 일반 워터마크 영역이 있으면 사용자명과 시각을 표시한다.
   if (base.watermark) {
-    if ($("#watermark").size() > 0) {
-      var name = uname || "[미리보기]";
-      var html = name + "<br/>\n" + nowStr;
-
-      $("#watermark p").html(html);
-    }
+    startWatermarkRefresh();
   }
 
   // 부모 프레임이 이전/다음 이동 함수를 제공하는지 확인한다.
