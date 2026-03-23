@@ -113,9 +113,9 @@ function getWatermarkHtml() {
 
 function buildStarbucksWatermarkHtml(text) {
   var rows = "";
-  var repeatedText = new Array(8).join(text + "    ");
+  var repeatedText = new Array(16).join(text + "          ");
 
-  for (var i = 0; i < 12; i++) {
+  for (var i = 0; i < 22; i++) {
     rows +=
       '<div class="sb-watermark-row"><span>' +
       repeatedText +
