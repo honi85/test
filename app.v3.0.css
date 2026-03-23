@@ -1034,14 +1034,14 @@ body {
 
 .sb-watermark-grid {
   position: absolute;
-  left: -65vw;
-  top: -65vh;
-  width: 230vw;
-  height: 230vh;
+  left: 50%;
+  top: 50%;
+  width: 320vw;
+  height: 320vh;
   display: flex;
   flex-direction: column;
   justify-content: space-evenly;
-  transform: rotate(-45deg);
+  transform: translate(-50%, -50%) rotate(-45deg);
   transform-origin: center;
   opacity: 0.1;
 }
@@ -1056,7 +1056,7 @@ body {
 
 .sb-watermark-row span {
   display: inline-block;
-  min-width: 320%;
+  min-width: 420%;
   color: #333;
   font-size: 15px;
   font-weight: 600;
