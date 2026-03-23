@@ -444,6 +444,8 @@ function page_initialize() {
   var menus = $(".index-list [data-page-id]");
   var pageMoreIndicator = null;
   var pageMoreIndicatorTimer = null;
+  var pageMoreObserver = null;
+  var pageMoreObservedPage = null;
 
   function ensurePageMoreIndicator() {
     if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
@@ -610,6 +612,30 @@ function page_initialize() {
     pageMoreIndicatorTimer = setTimeout(function () {
       updatePageMoreIndicator();
     }, 120);
+  }
+
+  function observeActivePageMoreChanges(pageEl) {
+    if (pageMoreObserver) {
+      pageMoreObserver.disconnect();
+      pageMoreObserver = null;
+    }
+    if (pageMoreObservedPage) {
+      pageMoreObservedPage.removeEventListener("load", schedulePageMoreIndicatorUpdate, true);
+      pageMoreObservedPage = null;
+    }
+    if (!pageEl || !("MutationObserver" in window)) return;
+
+    pageMoreObservedPage = pageEl;
+    pageMoreObservedPage.addEventListener("load", schedulePageMoreIndicatorUpdate, true);
+    pageMoreObserver = new MutationObserver(function () {
+      schedulePageMoreIndicatorUpdate();
+    });
+    pageMoreObserver.observe(pageEl, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["style", "class", "src"],
+    });
   }
 
   // 외부 HTML 모듈은 고유 콜백 이름을 전달해 iframe에서 부모 창으로 진행률을 올린다.
@@ -1120,6 +1146,7 @@ function page_initialize() {
 
   function pageShowed(id) {
     var nowPage = $("[data-page-id='" + id + "']");
+    observeActivePageMoreChanges(nowPage.get(0));
 
     // 현재 페이지의 이미지를 복원하고 필요하면 축소본으로 교체한다.
     _restorePageImages(nowPage);
