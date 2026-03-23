@@ -976,6 +976,7 @@ function page_initialize() {
     $("[data-page-id='" + index + "']").addClass("active");
     updateSwipeNavigationVisibility();
     scrollActiveMenuIntoView();
+    autoCompleteNearFitModules();
     onScroll({ target: screenBody.get(0) });
     schedulePageMoreIndicatorUpdate();
     $("[data-page-id] video, [data-page-id] audio").each(function (i, el) {
@@ -1428,16 +1429,32 @@ function page_initialize() {
     }
   });
 
+  function completeVisiblePassiveModules() {
+    $(".page-item.active .module-item").each(function (ix, el) {
+      var p = el.getBoundingClientRect();
+      if (p.y + p.height < window.innerHeight + 30) {
+        var mid = $(el).attr("data-mod-id");
+        if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
+      }
+    });
+  }
+
+  function autoCompleteNearFitModules() {
+    var activePage = $(".page-item.active").get(0);
+    if (!activePage) return;
+
+    var overflow =
+      activePage.getBoundingClientRect().bottom -
+      (window.innerHeight || document.documentElement.clientHeight || 0);
+    if (overflow > 0 && overflow < 20) {
+      completeVisiblePassiveModules();
+    }
+  }
+
   // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
   function onScroll(e) {
     if (e && e.type === "scroll") {
-      $(".page-item.active .module-item").each(function (ix, el) {
-        var p = el.getBoundingClientRect();
-        if (p.y + p.height < window.innerHeight + 30) {
-          var mid = $(el).attr("data-mod-id");
-          if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
-        }
-      });
+      completeVisiblePassiveModules();
     }
     if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
       window.refreshActivePageImages(false);
