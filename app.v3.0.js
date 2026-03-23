@@ -776,16 +776,35 @@ function page_initialize() {
   }
 
   // 순차 학습 과정에서는 현재 페이지의 모든 모듈이 완료되어야 다음으로 이동할 수 있다.
-  function isNextAllow() {
+  function isPageComplete(pageId) {
     var enabled = true;
-    $("[data-page-id='" + pageIndex + "'] [data-mod-id]").each(function (i, v) {
+    $("[data-page-id='" + pageId + "'] [data-mod-id]").each(function (i, v) {
       var me = moduleExtra[$(v).attr("data-mod-id")];
-      if (me.process !== 1 && enabled) enabled = false;
+      if ((me ? me.process : 0) !== 1 && enabled) enabled = false;
     });
-    return !(!enabled && base?.sequential) || base?.preview;
+    return enabled;
+  }
+
+  function isNextAllow() {
+    return !base?.sequential || !!base?.preview || isPageComplete(pageIndex);
   }
 
   window.isNextAllow = isNextAllow;
+
+  function canMoveToPage(index) {
+    if (!base?.sequential || base?.preview) return true;
+
+    var currentIx = pageIds.indexOf(pageIndex);
+    var targetIx = pageIds.indexOf(index);
+    if (currentIx < 0 || targetIx < 0) return true;
+    if (targetIx <= currentIx) return true;
+
+    for (var ix = currentIx; ix < targetIx; ix++) {
+      if (!isPageComplete(pageIds[ix])) return false;
+    }
+
+    return true;
+  }
 
   // 페이지 단위 진도를 갱신하고 SCORM 반영 큐를 실행한다.
   function setProcess(id, value) {
@@ -931,19 +950,7 @@ function page_initialize() {
 
   // 현재 페이지를 바꾸고 마지막 위치를 SCORM에 저장한다.
   function setPageIndex(index) {
-    if (index !== "0_0") {
-      var ix = pageIds.indexOf(index);
-      var prevPageId = pageIds[ix - 1];
-      var enabled = true;
-      $("[data-page-id='" + prevPageId + "'] [data-mod-id]").each(
-        function (i, v) {
-          var me = moduleExtra[$(v).attr("data-mod-id")];
-          if (me.process !== 1 && enabled) enabled = false;
-        },
-      );
-
-      if (!enabled && base?.sequential && !base?.preview) return;
-    }
+    if (!canMoveToPage(index)) return;
 
     ScormSet("cmi.location", index);
     pageIndex = index;
@@ -1284,21 +1291,7 @@ function page_initialize() {
           el.pause();
         });
       }
-      if (!isEnd) {
-        var nextPageId = pageIds[realIndex + 1];
-        var enabled = true;
-        $("[data-page-id='" + nextPageId + "'] [data-mod-id]").each(
-          function (i, v) {
-            var me = moduleExtra[$(v).attr("data-mod-id")];
-            if (me.process !== 1 && enabled) enabled = false;
-          },
-        );
-        if (!enabled && base?.sequential && !base?.preview) {
-          swiper.allowSlideNext = false;
-        } else {
-          swiper.allowSlideNext = true;
-        }
-      }
+      swiper.allowSlideNext = !isParentFunc("next") && !isEnd && isNextAllow();
       pageShowed(pageIds[realIndex]);
       updateSwipeNavigationVisibility();
       schedulePageMoreIndicatorUpdate();
@@ -1385,24 +1378,15 @@ function page_initialize() {
   menus.click(function () {
     var id = $(this).attr("data-page-id");
     if (!isSwipe || !swiper) {
+      if (!canMoveToPage(id)) {
+        alert(NOT_ALLOWED_NEXT_MSG);
+        return;
+      }
       setPageIndex(id);
     } else {
-      var index = id;
-      if (index !== "0_0") {
-        var ix = pageIds.indexOf(index);
-        var prevPageId = pageIds[ix - 1];
-        var enabled = true;
-        $("[data-page-id='" + prevPageId + "'] [data-mod-id]").each(
-          function (i, v) {
-            var me = moduleExtra[$(v).attr("data-mod-id")];
-            if (me.process !== 1 && enabled) enabled = false;
-          },
-        );
-
-        if (!enabled && base?.sequential && !base?.preview) {
-          alert(NOT_ALLOWED_NEXT_MSG);
-          return;
-        }
+      if (!canMoveToPage(id)) {
+        alert(NOT_ALLOWED_NEXT_MSG);
+        return;
       }
       var realIndex = pageIds.indexOf(id);
       swiper.slideTo(realIndex);
