@@ -282,6 +282,9 @@ var isIOSVideoFullscreen = false;
 var isIOSRotating = false;
 var iosFullscreenSyncTimer = null;
 var iosRotationTimer = null;
+var iosPendingImageRefreshForce = false;
+var iosPendingImageRefresh = false;
+var iosLastFullscreenSyncState = null;
 window.refreshActivePageImages = null;
 try {
   isNextParents = !!window.parent && !!window.parent.nextChangeOnLesson;
@@ -340,9 +343,22 @@ function syncIOSVideoFullscreen(isFullscreen) {
     function () {
       setIOSFullscreenUI(isFullscreen);
       if (isIOSRotating) return;
+      if (iosLastFullscreenSyncState === isFullscreen) return;
+      iosLastFullscreenSyncState = isFullscreen;
       try {
         window.parent.postMessage("toggleiOSMobileFullscreen");
       } catch (e) {}
+
+      if (
+        !isFullscreen &&
+        iosPendingImageRefresh &&
+        typeof window.refreshActivePageImages === "function"
+      ) {
+        var forceRefresh = iosPendingImageRefreshForce;
+        iosPendingImageRefresh = false;
+        iosPendingImageRefreshForce = false;
+        window.refreshActivePageImages(forceRefresh);
+      }
     },
     isFullscreen ? 120 : 220,
   );
@@ -395,8 +411,14 @@ window.addEventListener("orientationchange", function () {
   iosRotationTimer = setTimeout(function () {
     isIOSRotating = false;
     setIOSFullscreenUI(isIOSVideoFullscreen);
-    if (typeof window.refreshActivePageImages === "function") {
+    if (
+      !isIOSVideoFullscreen &&
+      typeof window.refreshActivePageImages === "function"
+    ) {
       window.refreshActivePageImages(true);
+    } else if (isIOSVideoFullscreen) {
+      iosPendingImageRefresh = true;
+      iosPendingImageRefreshForce = true;
     }
   }, 700);
 });
@@ -1328,6 +1350,12 @@ function page_initialize() {
 
   window.refreshActivePageImages = function (forceReset) {
     if (!isIOSDevice) return;
+    if (isIOSVideoFullscreen || isIOSRotating) {
+      iosPendingImageRefresh = true;
+      iosPendingImageRefreshForce =
+        iosPendingImageRefreshForce || !!forceReset;
+      return;
+    }
     clearTimeout(_pageImageRefreshTimer);
     _pageImageRefreshTimer = setTimeout(
       function () {
@@ -1866,6 +1894,10 @@ function page_initialize() {
           vjs.off("fullscreenchange");
           vjs.on("fullscreenchange", function () {
             isIOSVideoFullscreen = vjs.isFullscreen();
+            if (isIOSVideoFullscreen) {
+              _disconnectPageImageObserver();
+              _releaseInactivePageImages(pageIndex);
+            }
             syncIOSVideoFullscreen(isIOSVideoFullscreen);
           });
         }
