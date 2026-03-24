@@ -682,6 +682,10 @@ function page_initialize() {
   // 이미지/iframe 레이아웃이 늦게 확정되는 경우를 고려해 여러 타이밍에 재평가한다.
   function schedulePageMoreIndicatorUpdate() {
     clearTimeout(pageMoreIndicatorTimer);
+    if (isIOSDevice && isIOSVideoFullscreen) {
+      ensurePageMoreIndicator().removeClass("show");
+      return;
+    }
     updatePageMoreIndicator();
 
     requestAnimationFrame(function () {
@@ -742,6 +746,7 @@ function page_initialize() {
 
     pageMoreObservedPage = pageEl;
     pageMoreObservedLoadHandler = function () {
+      if (isIOSDevice && isIOSVideoFullscreen) return;
       autoCompleteNearFitModules();
       schedulePageMoreIndicatorUpdate();
     };
@@ -751,6 +756,7 @@ function page_initialize() {
       true,
     );
     pageMoreObserver = new MutationObserver(function () {
+      if (isIOSDevice && isIOSVideoFullscreen) return;
       autoCompleteNearFitModules();
       schedulePageMoreIndicatorUpdate();
     });
@@ -1233,8 +1239,9 @@ function page_initialize() {
     });
   }
 
-  function _trimActivePageImages(nowPage, forceReset) {
+  function _trimActivePageImages(nowPage, forceReset, shouldReobserve) {
     if (!isIOSDevice || !nowPage || !nowPage.length) return;
+    if (typeof shouldReobserve === "undefined") shouldReobserve = true;
 
     var viewportBottom =
       window.innerHeight || document.documentElement.clientHeight || 0;
@@ -1264,7 +1271,9 @@ function page_initialize() {
       }
     });
 
-    _observePageImages(nowPage);
+    if (shouldReobserve) {
+      _observePageImages(nowPage);
+    }
   }
 
   function _scheduleTrimActivePageImages(nowPage, forceReset) {
@@ -1616,6 +1625,7 @@ function page_initialize() {
   // 스크롤이 거의 필요 없는 페이지(overflow 20px 미만)는 진입 시 바로 자동 완료한다.
   // 사용자가 체감상 "다 본 페이지"인데 1~19px 차이로 progress가 안 오르는 문제를 막기 위한 예외 규칙이다.
   function autoCompleteNearFitModules() {
+    if (isIOSDevice && isIOSVideoFullscreen) return;
     var target = getPageMoreScrollTarget();
     var overflow = target
       ? getScrollHeight(target) - getClientHeight(target)
@@ -1901,6 +1911,29 @@ function page_initialize() {
             player.currentTime(moduleExtra[mid].currentTime);
           }
         });
+
+        if (
+          navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
+          window.document.domain.indexOf("leaders") < 0
+        ) {
+          var mediaEl = player.tech_ && player.tech_.el_ ? player.tech_.el_ : el;
+          if (mediaEl && !mediaEl.getAttribute("data-ios-fullscreen-bound")) {
+            mediaEl.setAttribute("data-ios-fullscreen-bound", "1");
+            mediaEl.addEventListener("webkitbeginfullscreen", function () {
+              isIOSVideoFullscreen = true;
+              _disconnectPageImageObserver();
+              _releaseInactivePageImages(pageIndex);
+              if (nowPage) {
+                _trimActivePageImages(nowPage, false, false);
+              }
+              syncIOSVideoFullscreen(true);
+            });
+            mediaEl.addEventListener("webkitendfullscreen", function () {
+              isIOSVideoFullscreen = false;
+              syncIOSVideoFullscreen(false);
+            });
+          }
+        }
       });
 
     setTimeout(() => {
