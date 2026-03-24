@@ -452,7 +452,10 @@ function page_initialize() {
   var pageMoreIndicatorTimer = null;
   var pageMoreObserver = null;
   var pageMoreObservedPage = null;
+  var pageMoreObservedLoadHandler = null;
 
+  // ===== More Indicator / Scroll Target =====
+  // 하단 more 버튼을 한 번만 생성하고 재사용한다.
   function ensurePageMoreIndicator() {
     if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
 
@@ -478,13 +481,47 @@ function page_initialize() {
     return pageMoreIndicator;
   }
 
+  // 실제로 스크롤 이동이 필요한 요소인지 판별한다.
   function isScrollableElement(el) {
     if (!el) return false;
     return el.scrollHeight - el.clientHeight > 16;
   }
 
+  // 페이지 내부에서 사용자가 직접 스크롤하는 컨테이너를 우선 찾는다.
+  // 긴 이미지/문서형 모듈처럼 page-item 내부에 별도 overflow 영역이 있는 케이스를 위한 탐색이다.
+  function getScrollableDescendant(root) {
+    if (!root || !root.querySelectorAll) return null;
+
+    var nodes = root.querySelectorAll("*");
+    var best = null;
+    var bestHeight = 0;
+
+    for (var i = 0; i < nodes.length; i++) {
+      var node = nodes[i];
+      if (!isScrollableElement(node)) continue;
+
+      var style = window.getComputedStyle(node);
+      var overflowY = style ? style.overflowY : "";
+      if (overflowY !== "auto" && overflowY !== "scroll") continue;
+
+      var rect = node.getBoundingClientRect();
+      if (rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) continue;
+
+      if (node.clientHeight > bestHeight) {
+        best = node;
+        bestHeight = node.clientHeight;
+      }
+    }
+
+    return best;
+  }
+
+  // more 버튼과 근접 자동완료가 공통으로 사용할 "현재 페이지의 실제 스크롤 대상"을 찾는다.
   function getPageMoreScrollTarget() {
     var activePage = $("[data-page-id].active").first().get(0);
+    var innerScrollable = getScrollableDescendant(activePage);
+    if (innerScrollable) return innerScrollable;
+
     if (activePage && isScrollableElement(activePage)) return activePage;
 
     var bodyEl = screenBody.get(0);
@@ -496,6 +533,8 @@ function page_initialize() {
     return null;
   }
 
+  // 활성 페이지 아래에 아직 보지 않은 영역이 남아 있는지 계산한다.
+  // 페이지 자체가 더 길거나, 실제 스크롤 대상이 끝까지 내려가지 않은 경우 모두 true다.
   function hasActivePageMoreBelow(activePage, target) {
     if (!activePage) return false;
 
@@ -520,6 +559,7 @@ function page_initialize() {
     return scrollTop + clientHeight < scrollHeight - 24;
   }
 
+  // window/document와 일반 엘리먼트를 같은 방식으로 다루기 위한 스크롤 유틸리티다.
   function getScrollTop(target) {
     if (!target) return 0;
     if (
@@ -534,6 +574,7 @@ function page_initialize() {
     return target.scrollTop || 0;
   }
 
+  // 현재 스크롤 대상의 가시 높이를 반환한다.
   function getClientHeight(target) {
     if (!target) return window.innerHeight;
     if (
@@ -548,6 +589,7 @@ function page_initialize() {
     return target.clientHeight || window.innerHeight;
   }
 
+  // 현재 스크롤 대상의 전체 콘텐츠 높이를 반환한다.
   function getScrollHeight(target) {
     if (!target) return 0;
     if (
@@ -568,6 +610,7 @@ function page_initialize() {
     return target.scrollHeight || 0;
   }
 
+  // more 버튼 클릭 시 다음 위치로 부드럽게 이동시킨다.
   function scrollToTop(target, top) {
     if (!target) return;
     if (
@@ -588,6 +631,7 @@ function page_initialize() {
     }
   }
 
+  // more 버튼 노출 여부를 현재 활성 페이지 상태에 맞춰 갱신한다.
   function updatePageMoreIndicator() {
     var indicator = ensurePageMoreIndicator();
     var target = getPageMoreScrollTarget();
@@ -608,6 +652,7 @@ function page_initialize() {
     indicator.toggleClass("show", !!hasMoreBelow);
   }
 
+  // 이미지/iframe 레이아웃이 늦게 확정되는 경우를 고려해 여러 타이밍에 재평가한다.
   function schedulePageMoreIndicatorUpdate() {
     clearTimeout(pageMoreIndicatorTimer);
     updatePageMoreIndicator();
@@ -624,6 +669,34 @@ function page_initialize() {
     }, 120);
   }
 
+  // 활성 페이지가 실제로 보이는 세로 영역을 계산한다.
+  // screen_body, page-item, fullscreen 상태가 섞여도 자동완료 기준이 흔들리지 않게 하기 위한 값이다.
+  function getActivePageViewportBounds() {
+    var viewportTop = 0;
+    var viewportBottom =
+      window.innerHeight || document.documentElement.clientHeight || 0;
+    var activePage = $("[data-page-id].active").first().get(0);
+    var bodyEl = screenBody.get(0);
+
+    if (bodyEl) {
+      var bodyRect = bodyEl.getBoundingClientRect();
+      viewportTop = Math.max(viewportTop, bodyRect.top);
+      viewportBottom = Math.min(viewportBottom, bodyRect.bottom);
+    }
+
+    if (activePage) {
+      var pageRect = activePage.getBoundingClientRect();
+      viewportTop = Math.max(viewportTop, pageRect.top);
+      viewportBottom = Math.min(viewportBottom, pageRect.bottom);
+    }
+
+    return {
+      top: viewportTop,
+      bottom: viewportBottom,
+    };
+  }
+
+  // 활성 페이지의 load/DOM 변화를 감시해 more 버튼과 근접 자동완료를 다시 계산한다.
   function observeActivePageMoreChanges(pageEl) {
     if (pageMoreObserver) {
       pageMoreObserver.disconnect();
@@ -632,20 +705,26 @@ function page_initialize() {
     if (pageMoreObservedPage) {
       pageMoreObservedPage.removeEventListener(
         "load",
-        schedulePageMoreIndicatorUpdate,
+        pageMoreObservedLoadHandler,
         true,
       );
       pageMoreObservedPage = null;
+      pageMoreObservedLoadHandler = null;
     }
     if (!pageEl || !("MutationObserver" in window)) return;
 
     pageMoreObservedPage = pageEl;
+    pageMoreObservedLoadHandler = function () {
+      autoCompleteNearFitModules();
+      schedulePageMoreIndicatorUpdate();
+    };
     pageMoreObservedPage.addEventListener(
       "load",
-      schedulePageMoreIndicatorUpdate,
+      pageMoreObservedLoadHandler,
       true,
     );
     pageMoreObserver = new MutationObserver(function () {
+      autoCompleteNearFitModules();
       schedulePageMoreIndicatorUpdate();
     });
     pageMoreObserver.observe(pageEl, {
@@ -743,7 +822,8 @@ function page_initialize() {
     _saveSuspendDataNow();
   });
 
-  // 모듈 상태를 병합 저장한다. process는 감소시키지 않고 가장 큰 값을 유지한다.
+  // ===== Module Progress / Completion / Sequential Navigation =====
+  // process는 감소시키지 않고 최대값만 유지해 되감기나 재생 위치 변경으로 진도가 후퇴하지 않게 한다.
   function setModuleExtra(mid, val) {
     const lastModuleId = $("[data-page-id='" + pageIndex + "'] [data-mod-id]")
       .last()
@@ -773,6 +853,8 @@ function page_initialize() {
   window.setModuleExtra = setModuleExtra;
 
   // 특정 모듈이 속한 페이지의 평균 진도를 다시 계산한다.
+  // 특정 모듈이 속한 페이지의 평균 진도를 다시 계산한다.
+  // 페이지 단위 진도/목차 표시/순차학습 잠금은 모두 이 계산 결과를 기준으로 움직인다.
   function renderModuleExtra(mid) {
     let nPageOfModule = -1;
     for (var i = 0; i < moduleIds.length; i++) {
@@ -794,6 +876,8 @@ function page_initialize() {
   }
 
   // 순차 학습 과정에서는 현재 페이지의 모든 모듈이 완료되어야 다음으로 이동할 수 있다.
+  // 페이지 내 모든 모듈의 process가 1인지 확인한다.
+  // 목차 완료 아이콘과 순차학습 next 허용 여부는 이 함수 기준으로 맞춘다.
   function isPageComplete(pageId) {
     var enabled = true;
     $("[data-page-id='" + pageId + "'] [data-mod-id]").each(function (i, v) {
@@ -803,12 +887,15 @@ function page_initialize() {
     return enabled;
   }
 
+  // 현재 페이지 완료 여부를 기준으로 다음 페이지 이동 가능 상태를 반환한다.
   function isNextAllow() {
     return !base?.sequential || !!base?.preview || isPageComplete(pageIndex);
   }
 
   window.isNextAllow = isNextAllow;
 
+  // 순차학습 과정에서 목표 페이지로 실제 이동 가능한지 검사한다.
+  // 앞으로 이동할 때는 현재 페이지부터 목표 직전 페이지까지 모두 완료돼 있어야 한다.
   function canMoveToPage(index) {
     if (!base?.sequential || base?.preview) return true;
 
@@ -825,6 +912,7 @@ function page_initialize() {
   }
 
   // 페이지 단위 진도를 갱신하고 SCORM 반영 큐를 실행한다.
+  // 페이지 단위 진도를 반영하고, SCORM 저장 큐와 목차 UI를 함께 갱신한다.
   function setProcess(id, value) {
     if (value !== 1 && process[id] === value) return;
     process[id] = value;
@@ -854,6 +942,7 @@ function page_initialize() {
     }, 500);
   }
 
+  // 오른쪽 목차의 progress bar와 완료 아이콘 상태를 현재 process 배열 기준으로 다시 그린다.
   function reloadProcess() {
     menus.each(function (i, el) {
       var percent = process[i] || 0;
@@ -898,6 +987,7 @@ function page_initialize() {
     }
   }
 
+  // ===== Page Lifecycle / Asset Binding =====
   reloadProcess();
 
   // SCORM 값은 이전 기록과 비교해 바뀐 경우에만 다시 저장한다.
@@ -967,6 +1057,7 @@ function page_initialize() {
   }, 0);
 
   // 현재 페이지를 바꾸고 마지막 위치를 SCORM에 저장한다.
+  // 현재 페이지를 전환하고, 페이지 진입 시 필요한 후처리를 한 번에 수행한다.
   function setPageIndex(index) {
     if (!canMoveToPage(index)) return;
 
@@ -1174,6 +1265,7 @@ function page_initialize() {
     );
   }
 
+  // 활성 페이지에 필요한 리소스(이미지/비디오)만 붙이고 관련 옵저버를 연결한다.
   function pageShowed(id) {
     var nowPage = $("[data-page-id='" + id + "']");
     observeActivePageMoreChanges(nowPage.get(0));
@@ -1429,29 +1521,39 @@ function page_initialize() {
     }
   });
 
+  // ===== Passive Module Auto-complete =====
+  // 화면 안에 실제로 들어온 비상호작용 모듈만 자동 완료 처리한다.
+  // act=false 모듈만 대상으로 하며, 보이는 영역 계산은 활성 페이지의 실제 viewport를 기준으로 한다.
   function completeVisiblePassiveModules() {
+    var viewportBounds = getActivePageViewportBounds();
     $(".page-item.active .module-item").each(function (ix, el) {
       var p = el.getBoundingClientRect();
-      if (p.y + p.height < window.innerHeight + 30) {
+      if (
+        p.bottom <= viewportBounds.bottom + 20 &&
+        p.top < viewportBounds.bottom
+      ) {
         var mid = $(el).attr("data-mod-id");
         if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
       }
     });
   }
 
+  // 스크롤이 거의 필요 없는 페이지(overflow 20px 미만)는 진입 시 바로 자동 완료한다.
+  // 사용자가 체감상 "다 본 페이지"인데 1~19px 차이로 progress가 안 오르는 문제를 막기 위한 예외 규칙이다.
   function autoCompleteNearFitModules() {
-    var activePage = $(".page-item.active").get(0);
-    if (!activePage) return;
-
-    var overflow =
-      activePage.getBoundingClientRect().bottom -
-      (window.innerHeight || document.documentElement.clientHeight || 0);
-    if (overflow > 0 && overflow < 20) {
+    var target = getPageMoreScrollTarget();
+    var overflow = target ? getScrollHeight(target) - getClientHeight(target) : 0;
+    if (
+      target &&
+      overflow > 0 &&
+      overflow < 20
+    ) {
       completeVisiblePassiveModules();
     }
   }
 
   // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
+  // 사용자 스크롤 시 비상호작용 모듈 자동완료와 more 버튼 갱신을 함께 처리한다.
   function onScroll(e) {
     if (e && e.type === "scroll") {
       completeVisiblePassiveModules();
@@ -1465,6 +1567,7 @@ function page_initialize() {
   // 스크롤 이벤트는 스로틀링해 과도한 계산을 줄인다.
   var _scrollThrottleTimer = null;
   var _pendingScrollEvent = null;
+  // 스크롤 이벤트를 스로틀링해 과도한 DOM 계산을 줄인다.
   function onScrollThrottled(e) {
     _pendingScrollEvent = e;
     if (_scrollThrottleTimer) return;
