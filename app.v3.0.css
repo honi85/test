@@ -150,6 +150,14 @@ body {
     background 0.18s ease;
 }
 
+#screen_body > .swiper-button-prev {
+  clip-path: inset(0 12px 0 0 round 0 20px 20px 0);
+}
+
+#screen_body > .swiper-button-next {
+  clip-path: inset(0 0 0 12px round 20px 0 0 20px);
+}
+
 #screen_body.nav-on > .swiper-button-prev,
 #screen_body.nav-on > .swiper-button-next {
   opacity: 0.7;
@@ -162,6 +170,14 @@ body {
     height: 72px;
     margin-top: -36px;
     opacity: 0.7 !important;
+  }
+
+  #screen_body > .swiper-button-prev {
+    clip-path: inset(0 10px 0 0 round 0 18px 18px 0);
+  }
+
+  #screen_body > .swiper-button-next {
+    clip-path: inset(0 0 0 10px round 18px 0 0 18px);
   }
 }
 
@@ -292,15 +308,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(
-    180deg,
-    rgba(57, 67, 82, 0.94) 0%,
-    rgba(26, 33, 42, 0.96) 100%
-  );
-  border: 1px solid var(--control-line);
-  box-shadow:
-    0 16px 30px rgba(20, 24, 31, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
   color: #fff;
   cursor: pointer;
   z-index: 1200;
@@ -311,9 +321,28 @@ body {
     transform 0.2s ease;
 }
 
+#page_more_indicator::before {
+  content: "";
+  position: absolute;
+  width: 46px;
+  height: 46px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(57, 67, 82, 0.94) 0%,
+    rgba(26, 33, 42, 0.96) 100%
+  );
+  border: 1px solid var(--control-line);
+  box-shadow:
+    0 16px 30px rgba(20, 24, 31, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 #page_more_indicator svg {
-  width: 24px;
-  height: 24px;
+  position: relative;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
   animation: pageMoreBounce 1.2s ease-in-out infinite;
 }
 
