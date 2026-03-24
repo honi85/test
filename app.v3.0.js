@@ -1910,30 +1910,27 @@ function page_initialize() {
           if (nowPage) {
             player.currentTime(moduleExtra[mid].currentTime);
           }
-        });
-
-        if (
-          navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
-          window.document.domain.indexOf("leaders") < 0
-        ) {
-          var mediaEl = player.tech_ && player.tech_.el_ ? player.tech_.el_ : el;
-          if (mediaEl && !mediaEl.getAttribute("data-ios-fullscreen-bound")) {
-            mediaEl.setAttribute("data-ios-fullscreen-bound", "1");
-            mediaEl.addEventListener("webkitbeginfullscreen", function () {
-              isIOSVideoFullscreen = true;
-              _disconnectPageImageObserver();
-              _releaseInactivePageImages(pageIndex);
-              if (nowPage) {
-                _trimActivePageImages(nowPage, false, false);
-              }
-              syncIOSVideoFullscreen(true);
-            });
-            mediaEl.addEventListener("webkitendfullscreen", function () {
-              isIOSVideoFullscreen = false;
-              syncIOSVideoFullscreen(false);
-            });
+          if (
+            navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
+            window.document.domain.indexOf("leaders") < 0
+          ) {
+            var mediaEl =
+              player.tech_ && player.tech_.el_ ? player.tech_.el_ : el;
+            if (mediaEl && !mediaEl.getAttribute("data-ios-fullscreen-bound")) {
+              mediaEl.setAttribute("data-ios-fullscreen-bound", "1");
+              mediaEl.addEventListener("webkitbeginfullscreen", function () {
+                isIOSVideoFullscreen = true;
+                _disconnectPageImageObserver();
+                _releaseInactivePageImages(pageIndex);
+                syncIOSVideoFullscreen(true);
+              });
+              mediaEl.addEventListener("webkitendfullscreen", function () {
+                isIOSVideoFullscreen = false;
+                syncIOSVideoFullscreen(false);
+              });
+            }
           }
-        }
+        });
       });
 
     setTimeout(() => {
