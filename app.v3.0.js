@@ -743,6 +743,25 @@ function page_initialize() {
     return target.clientHeight || window.innerHeight;
   }
 
+  function setAutoplayProgressVisible(visible) {
+    $(".autoplay-progress").toggleClass("is-visible", !!visible);
+  }
+
+  function shouldShowAutoplayProgress() {
+    if (!isSwipe || !swiper || !(autoPlay > 0)) return false;
+    if (!swiper.autoplay || !swiper.autoplay.running || swiper.isEnd) return false;
+
+    var activeIndex =
+      typeof swiper.realIndex === "number" ? swiper.realIndex : swiper.activeIndex;
+    if (typeof activeIndex !== "number" || activeIndex < 0) return false;
+
+    return process[activeIndex] === 1;
+  }
+
+  function updateAutoplayProgressVisibility() {
+    setAutoplayProgressVisible(shouldShowAutoplayProgress());
+  }
+
   // 현재 스크롤 대상의 전체 콘텐츠 높이를 반환한다.
   function getScrollHeight(target) {
     if (!target) return 0;
@@ -783,6 +802,49 @@ function page_initialize() {
     } else {
       target.scrollTop = top;
     }
+  }
+
+  function scrollQuizResultIntoView(parent) {
+    if (!parent || parent.length === 0) return;
+
+    var resultEl =
+      parent.children(".result").get(0) || parent.find(".result").first().get(0);
+    if (!resultEl) return;
+
+    setTimeout(function () {
+      if (typeof resultEl.scrollIntoView === "function") {
+        resultEl.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+          inline: "nearest",
+        });
+      }
+
+      requestAnimationFrame(function () {
+        var target = getPageMoreScrollTarget();
+        var margin = 20;
+        var nextTop = 0;
+        var resultRect = resultEl.getBoundingClientRect();
+
+        if (
+          !target ||
+          target === window ||
+          target === document ||
+          target === document.body ||
+          target === document.documentElement ||
+          target === document.scrollingElement
+        ) {
+          nextTop = getScrollTop(document.scrollingElement) + resultRect.top - margin;
+          scrollToTop(document.scrollingElement, Math.max(0, nextTop));
+          return;
+        }
+
+        var targetRect = target.getBoundingClientRect();
+        nextTop =
+          getScrollTop(target) + (resultRect.top - targetRect.top) - margin;
+        scrollToTop(target, Math.max(0, nextTop));
+      });
+    }, 40);
   }
 
   // more 버튼 노출 여부를 현재 활성 페이지 상태에 맞춰 갱신한다.
@@ -1135,7 +1197,7 @@ function page_initialize() {
     ) {
       swiper.autoplay.timeLeft = 3000;
       swiper.autoplay.resume();
-      $(".autoplay-progress").show();
+      updateAutoplayProgressVisibility();
     }
 
     console.log("setProcess", id, value, isParentFunc("next"), isNextAllow());
@@ -1571,6 +1633,7 @@ function page_initialize() {
           if (!progressCircle || !progressContent) return;
           progressCircle.style.setProperty("--progress", 1 - progress);
           progressContent.textContent = `${Math.ceil(time / 1000)}s`;
+          updateAutoplayProgressVisibility();
         },
       },
       allowSlidePrev: !isPrevParents,
@@ -1641,12 +1704,12 @@ function page_initialize() {
       if (autoPlay > 0) {
         if (process[realIndex] !== 1 || isEnd) {
           swiper.autoplay.pause(false, true);
-          $(".autoplay-progress").hide();
+          updateAutoplayProgressVisibility();
         } else {
-          $(".autoplay-progress").show();
+          updateAutoplayProgressVisibility();
         }
       } else {
-        $(".autoplay-progress").hide();
+        updateAutoplayProgressVisibility();
       }
       setPageIndex(nextPageId);
       setProcess(realIndex, process[realIndex]);
@@ -1664,7 +1727,7 @@ function page_initialize() {
     if (swiper.autoplay && typeof swiper.autoplay.pause === "function") {
       swiper.autoplay.pause();
     }
-    $(".autoplay-progress").hide();
+    updateAutoplayProgressVisibility();
   } else {
     if (!$(".page-item").hasClass("active")) $(".page-item").addClass("active");
     var loc2 = _loc || pageIdItems.attr("data-page-id");
@@ -1875,17 +1938,58 @@ function page_initialize() {
   window.setQuizValueSelect = setQuizValueSelect;
 
   // 퀴즈 답안을 저장하고 정답 여부를 계산한다.
-  function setQuizValue(mid, vs) {
-    var p = $(".module-quiz[data-mod-valcheck='" + mid + "']");
+  function getQuizAnswers(parent) {
     var answers = [];
     try {
-      answers = JSON.parse(p.find("textarea").val());
+      answers = JSON.parse(parent.find("textarea").val());
     } catch (e) {
-      var value = p.find("textarea").val()?.trim();
+      var value = parent.find("textarea").val()?.trim() || "";
       if (value.startsWith("[")) value = value.substring(1, value.length);
       if (value.endsWith("]")) value = value.substring(0, value.length - 1);
-      answers = value.split(",");
+      answers = value ? value.split(",") : [];
     }
+    return answers.map(function (v) {
+      return String(v).trim();
+    });
+  }
+
+  function updateQuizModuleVisualState(parent, state, answers, vals) {
+    if (!parent || parent.length === 0) return;
+
+    var normalizedAnswers = (answers || []).map(function (v) {
+      return String(v).trim();
+    });
+    var normalizedVals = (vals || []).map(function (v) {
+      return String(v).trim();
+    });
+    var hasSelection = normalizedVals.length > 0 && normalizedVals[0] !== "";
+
+    parent.toggleClass("has-selection", hasSelection);
+
+    parent.find(".quiz-ul-select li > label, .quiz-ox-select label").each(function () {
+      var label = $(this);
+      var input = label.find("input").first();
+      var value = String(input.val() || "").trim();
+      var isSelected = input.prop("checked");
+      var isAnswer = normalizedAnswers.indexOf(value) > -1;
+
+      label.toggleClass("is-selected", isSelected);
+      label.toggleClass("is-answer", !!state && isAnswer);
+      label.toggleClass(
+        "is-missed-answer",
+        state === "fail" && isAnswer && !isSelected,
+      );
+      label.toggleClass(
+        "is-wrong-selection",
+        state === "fail" && isSelected && !isAnswer,
+      );
+      label.toggleClass("is-correct-selection", state === "ok" && isSelected);
+    });
+  }
+
+  function setQuizValue(mid, vs) {
+    var p = $(".module-quiz[data-mod-valcheck='" + mid + "']");
+    var answers = getQuizAnswers(p);
     var state = "fail";
     if (p.find(".quiz-ul-select")?.length > 0) {
       // 다중 선택형
@@ -1925,6 +2029,7 @@ function page_initialize() {
 
     setModuleExtra(mid, { process: 1, vals: vs, val: vs[0], state });
     quizRender();
+    scrollQuizResultIntoView(p);
   }
 
   window.setQuizValue = setQuizValue;
@@ -1933,7 +2038,7 @@ function page_initialize() {
   function setQuizVal(o) {
     var parent = $(o).parents("[data-mod-valcheck]");
     var uv = o.value;
-    var answers = JSON.parse(parent.find("textarea").val());
+    var answers = getQuizAnswers(parent);
 
     var state = "fail";
     if (
@@ -1953,6 +2058,7 @@ function page_initialize() {
     var mid = parent.parents("[data-mod-id]").attr("data-mod-id");
     setModuleExtra(mid, { process: 1, val: uv, vals: [uv], state });
     quizRender();
+    scrollQuizResultIntoView(parent);
   }
 
   window.setQuizVal = setQuizVal;
@@ -1993,7 +2099,29 @@ function page_initialize() {
           $("input[name='answer_" + key + "']").val(val);
         }
       }
+
+      updateQuizModuleVisualState(
+        parent,
+        moduleExtra[key].state,
+        getQuizAnswers(parent),
+        moduleExtra[key].vals ||
+          (typeof moduleExtra[key].val !== "undefined"
+            ? [moduleExtra[key].val]
+            : []),
+      );
     }
+
+    $(".module-quiz[data-mod-valcheck]").each(function () {
+      var parent = $(this);
+      var mid = parent.attr("data-mod-valcheck");
+      if (moduleExtra[mid]) return;
+
+      var vals = [];
+      parent.find("input:checked").each(function (_, input) {
+        vals.push(input.value);
+      });
+      updateQuizModuleVisualState(parent, "", getQuizAnswers(parent), vals);
+    });
   }
 
   quizRender();
@@ -2230,7 +2358,7 @@ function page_initialize() {
           if (intervalTargets.indexOf(this) < 0) intervalTargets.push(this);
           if (autoPlay && swiper) {
             swiper.autoplay.pause();
-            $(".autoplay-progress").hide();
+            updateAutoplayProgressVisibility();
           }
         })
         .on("pause.lcmsMediaState", function () {
