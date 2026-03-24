@@ -527,7 +527,12 @@ function page_initialize() {
       if (overflowY !== "auto" && overflowY !== "scroll") continue;
 
       var rect = node.getBoundingClientRect();
-      if (rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) continue;
+      if (
+        rect.height <= 0 ||
+        rect.bottom <= 0 ||
+        rect.top >= window.innerHeight
+      )
+        continue;
 
       if (node.clientHeight > bestHeight) {
         best = node;
@@ -1352,8 +1357,7 @@ function page_initialize() {
     if (!isIOSDevice) return;
     if (isIOSVideoFullscreen || isIOSRotating) {
       iosPendingImageRefresh = true;
-      iosPendingImageRefreshForce =
-        iosPendingImageRefreshForce || !!forceReset;
+      iosPendingImageRefreshForce = iosPendingImageRefreshForce || !!forceReset;
       return;
     }
     clearTimeout(_pageImageRefreshTimer);
@@ -1592,23 +1596,35 @@ function page_initialize() {
   // near-fit 자동완료는 단일 passive 모듈 페이지에서만 허용한다.
   // 여러 이미지 모듈이 한 페이지에 있을 때 진입 직후 전체 완료로 찍히는 오탐을 막기 위한 제한이다.
   function canAutoCompleteNearFitPage() {
-    var modules = $(".page-item.active .module-item");
-    if (modules.length !== 1) return false;
+    var activePage = $(".page-item.active");
+    if (!activePage.length) return false;
 
-    var mid = modules.first().attr("data-mod-id");
-    return !!mid && !!moduleExtra[mid] && !moduleExtra[mid].act;
+    var moduleBlocks = activePage.find("[data-mod-id]");
+    if (moduleBlocks.length !== 1) return false;
+
+    var moduleEl = moduleBlocks.first();
+    var mid = moduleEl.attr("data-mod-id");
+    if (!mid || !moduleExtra[mid] || moduleExtra[mid].act) return false;
+
+    // 단일 이미지처럼 "거의 다 보이는 정적 페이지"만 예외 처리한다.
+    // 페이지 전체 기준으로 이미지가 여러 장이면 실제 스크롤을 요구한다.
+    if (activePage.find("img").length > 1) return false;
+
+    return true;
   }
 
   // 스크롤이 거의 필요 없는 페이지(overflow 20px 미만)는 진입 시 바로 자동 완료한다.
   // 사용자가 체감상 "다 본 페이지"인데 1~19px 차이로 progress가 안 오르는 문제를 막기 위한 예외 규칙이다.
   function autoCompleteNearFitModules() {
     var target = getPageMoreScrollTarget();
-    var overflow = target ? getScrollHeight(target) - getClientHeight(target) : 0;
+    var overflow = target
+      ? getScrollHeight(target) - getClientHeight(target)
+      : 0;
     if (
       canAutoCompleteNearFitPage() &&
       target &&
       overflow > 0 &&
-      overflow < 20
+      overflow < 30
     ) {
       completeVisiblePassiveModules();
     }
@@ -1885,22 +1901,6 @@ function page_initialize() {
             player.currentTime(moduleExtra[mid].currentTime);
           }
         });
-
-        // iOS 커스텀 전체화면 처리에 맞춰 부모 창과 UI 상태를 동기화한다.
-        if (
-          navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
-          window.document.domain.indexOf("leaders") < 0
-        ) {
-          vjs.off("fullscreenchange");
-          vjs.on("fullscreenchange", function () {
-            isIOSVideoFullscreen = vjs.isFullscreen();
-            if (isIOSVideoFullscreen) {
-              _disconnectPageImageObserver();
-              _releaseInactivePageImages(pageIndex);
-            }
-            syncIOSVideoFullscreen(isIOSVideoFullscreen);
-          });
-        }
       });
 
     setTimeout(() => {

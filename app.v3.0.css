@@ -206,6 +206,22 @@ body {
     width: 10px;
     height: 10px;
   }
+
+  #screen_body > .swiper-button-prev:before {
+    left: 12px;
+  }
+
+  #screen_body > .swiper-button-prev:after {
+    left: 20px;
+  }
+
+  #screen_body > .swiper-button-next:before {
+    right: 20px;
+  }
+
+  #screen_body > .swiper-button-next:after {
+    right: 12px;
+  }
 }
 
 .swiper-button-prev {
