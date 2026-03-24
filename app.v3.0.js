@@ -296,8 +296,10 @@ function logIOSFullscreenDebug(stage, extra) {
     if (
       stage === "native-bind" ||
       stage === "fallback-bind" ||
+      stage === "fullscreen-button-press" ||
       stage === "native-enter" ||
       stage === "native-exit" ||
+      stage === "resume-check" ||
       stage === "vjs-fullscreenchange" ||
       stage === "sync-start" ||
       stage === "postMessage"
@@ -1982,6 +1984,7 @@ function page_initialize() {
             navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
             window.document.domain.indexOf("leaders") < 0
           ) {
+            var fullscreenAssistTimer = null;
             var fullscreenEnter = function () {
               if (isIOSVideoFullscreen) return;
               logIOSFullscreenDebug("native-enter", {
@@ -2035,6 +2038,62 @@ function page_initialize() {
               logIOSFullscreenDebug("native-bind", {
                 mid: mid,
                 candidates: mediaCandidates.length,
+              });
+            }
+
+            var fullscreenButton =
+              player.controlBar && player.controlBar.fullscreenToggle
+                ? player.controlBar.fullscreenToggle.el()
+                : player.el_ && player.el_.querySelector
+                  ? player.el_.querySelector(".vjs-fullscreen-control")
+                  : null;
+            if (
+              fullscreenButton &&
+              !fullscreenButton.getAttribute("data-ios-fullscreen-assist-bound")
+            ) {
+              fullscreenButton.setAttribute("data-ios-fullscreen-assist-bound", "1");
+              var onFullscreenButtonPress = function () {
+                logIOSFullscreenDebug("fullscreen-button-press", {
+                  currentPage: pageIndex,
+                  mid: mid,
+                });
+                clearTimeout(fullscreenAssistTimer);
+                fullscreenAssistTimer = setTimeout(function () {
+                  if (
+                    !isIOSVideoFullscreen &&
+                    mediaCandidates.some(function (candidate) {
+                      return !!candidate && !!candidate.webkitDisplayingFullscreen;
+                    }) === false
+                  ) {
+                    fullscreenEnter();
+                  }
+                }, 220);
+              };
+              fullscreenButton.addEventListener("touchend", onFullscreenButtonPress);
+              fullscreenButton.addEventListener("click", onFullscreenButtonPress);
+            }
+
+            var onIOSPageResume = function () {
+              if (!isIOSVideoFullscreen) return;
+              var stillFullscreen = mediaCandidates.some(function (candidate) {
+                if (!candidate) return false;
+                if (candidate.webkitDisplayingFullscreen) return true;
+                return (candidate.webkitPresentationMode || "inline") === "fullscreen";
+              });
+              logIOSFullscreenDebug("resume-check", {
+                currentPage: pageIndex,
+                mid: mid,
+                stillFullscreen: stillFullscreen,
+              });
+              if (!stillFullscreen) {
+                fullscreenExit();
+              }
+            };
+            if (!player.el_.getAttribute("data-ios-resume-bound")) {
+              player.el_.setAttribute("data-ios-resume-bound", "1");
+              window.addEventListener("pageshow", onIOSPageResume);
+              document.addEventListener("visibilitychange", function () {
+                if (!document.hidden) onIOSPageResume();
               });
             }
           }
