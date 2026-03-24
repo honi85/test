@@ -154,6 +154,41 @@ function buildStarbucksWatermarkHtml(text) {
   );
 }
 
+function getPlayerWatermarkHtml(html) {
+  if (isStarbucksWatermark()) {
+    return buildStarbucksWatermarkHtml(html);
+  }
+
+  return '<div class="no1"><p>' +
+    html +
+    '</p></div><div class="no2"><p>' +
+    html +
+    '</p></div><div class="no3"><p>' +
+    html +
+    "</p></div>";
+}
+
+function ensurePlayerWatermarkOverlay(playerEl) {
+  if (!playerEl) return null;
+  var $player = $(playerEl);
+  var $overlay = $player.children(".player-watermark-overlay").first();
+  if ($overlay.length) return $overlay;
+
+  $overlay = $('<div class="player-watermark-overlay" aria-hidden="true"></div>');
+  $player.append($overlay);
+  return $overlay;
+}
+
+function refreshPlayerWatermarkOverlays(html) {
+  $(".player-watermark-overlay").each(function () {
+    var $overlay = $(this);
+    $overlay
+      .toggleClass("sb-watermark", isStarbucksWatermark())
+      .toggleClass("default-watermark", !isStarbucksWatermark())
+      .html(getPlayerWatermarkHtml(html));
+  });
+}
+
 function refreshWatermarkText() {
   if (!base || !base.watermark) return;
 
@@ -185,6 +220,8 @@ function refreshWatermarkText() {
       }
     }
   }
+
+  refreshPlayerWatermarkOverlays(html);
 }
 
 function startWatermarkRefresh() {
@@ -380,12 +417,14 @@ function setIOSCustomVideoFullscreen(playerEl, isFullscreen) {
   if (!playerEl) return;
   if (isFullscreen) {
     iosCustomFullscreenPlayer = playerEl;
+    $("#root").addClass("ios-video-fullscreen-on");
     playerEl.classList.add("ios-video-fullscreen");
   } else {
     if (iosCustomFullscreenPlayer) {
       iosCustomFullscreenPlayer.classList.remove("ios-video-fullscreen");
     }
     playerEl.classList.remove("ios-video-fullscreen");
+    $("#root").removeClass("ios-video-fullscreen-on");
     iosCustomFullscreenPlayer = null;
   }
 }
@@ -1914,6 +1953,10 @@ function page_initialize() {
         vjs.ready(function () {
           let player = this;
           let mid = $(this.el_).parents("[data-mod-id]").attr("data-mod-id");
+          if (base.watermark) {
+            ensurePlayerWatermarkOverlay(player.el_);
+            refreshPlayerWatermarkOverlays(getWatermarkHtml());
+          }
           setTimeout(() => {
             // 빨리감기 금지 과정에서는 저장된 위치보다 앞으로 건너뛰지 못하게 막는다.
             if (!base.videoSeek) {
