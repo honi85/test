@@ -1155,12 +1155,30 @@ function page_initialize() {
     }
   }
 
+  // iOS에서는 실제 스크롤 컨테이너를 root로 써서 화면 근처 이미지만 제한적으로 로드한다.
+  function _getPageImageObserverRoot() {
+    var target = getPageMoreScrollTarget();
+    if (
+      target &&
+      target !== window &&
+      target !== document &&
+      target !== document.body &&
+      target !== document.documentElement &&
+      target !== document.scrollingElement
+    ) {
+      return target;
+    }
+    return null;
+  }
+
   function _observePageImages(nowPage) {
     _disconnectPageImageObserver();
     if (!isIOSDevice || !("IntersectionObserver" in window)) return;
 
     var imgs = nowPage.find("img[data-src]").toArray();
     if (!imgs.length) return;
+    var observerRoot = _getPageImageObserverRoot();
+    var eagerCount = 1;
 
     _pageImageObserver = new IntersectionObserver(
       function (entries) {
@@ -1173,14 +1191,14 @@ function page_initialize() {
         });
       },
       {
-        root: null,
-        rootMargin: "180px 0px 260px 0px",
+        root: observerRoot,
+        rootMargin: observerRoot ? "80px 0px 140px 0px" : "120px 0px 180px 0px",
         threshold: 0.01,
       },
     );
 
     imgs.forEach(function (img, index) {
-      if (index < 2) {
+      if (index < eagerCount) {
         _loadPageImage(img);
         return;
       }
@@ -1270,11 +1288,11 @@ function page_initialize() {
     var nowPage = $("[data-page-id='" + id + "']");
     observeActivePageMoreChanges(nowPage.get(0));
 
-    // 현재 페이지의 이미지를 복원하고 필요하면 축소본으로 교체한다.
-    _restorePageImages(nowPage);
-
     // 보이지 않는 페이지의 이미지는 다시 언로드한다.
     _releaseInactivePageImages(id);
+
+    // 현재 페이지의 이미지를 복원하고 필요하면 축소본으로 교체한다.
+    _restorePageImages(nowPage);
 
     // 비디오는 현재 페이지 진입 시점에만 실제 src를 붙인다.
     nowPage.find("video source:not([src])").each(function (v, el) {
@@ -1315,9 +1333,10 @@ function page_initialize() {
       function () {
         var activePage = $("[data-page-id='" + pageIndex + "']");
         if (!activePage.length) return;
+        _releaseInactivePageImages(pageIndex);
         _trimActivePageImages(activePage, !!forceReset);
       },
-      forceReset ? 180 : 80,
+      forceReset ? 260 : 80,
     );
   };
 
