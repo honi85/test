@@ -1211,3 +1211,27 @@ body {
   right: 0;
   bottom: 0;
 }
+
+.video-js.ios-video-fullscreen {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  z-index: 1400 !important;
+  background: #000 !important;
+}
+
+.video-js.ios-video-fullscreen.vjs-fluid {
+  padding-top: 0 !important;
+}
+
+.video-js.ios-video-fullscreen .vjs-tech,
+.video-js.ios-video-fullscreen video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain;
+}

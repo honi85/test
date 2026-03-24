@@ -285,35 +285,13 @@ var iosRotationTimer = null;
 var iosPendingImageRefreshForce = false;
 var iosPendingImageRefresh = false;
 var iosLastFullscreenSyncState = null;
+var iosCustomFullscreenPlayer = null;
 window.refreshActivePageImages = null;
 
 function logIOSFullscreenDebug(stage, extra) {
   if (!isIOSDevice) return;
   try {
     console.log("[ios-fullscreen]", stage, extra || "");
-  } catch (e) {}
-  try {
-    if (
-      stage === "native-bind" ||
-      stage === "fallback-bind" ||
-      stage === "fullscreen-button-press" ||
-      stage === "native-enter" ||
-      stage === "native-exit" ||
-      stage === "resume-check" ||
-      stage === "vjs-fullscreenchange" ||
-      stage === "sync-start" ||
-      stage === "postMessage"
-    ) {
-      var detail = "";
-      if (extra && typeof extra === "object") {
-        detail = Object.keys(extra)
-          .map(function (key) {
-            return key + ":" + extra[key];
-          })
-          .join(", ");
-      }
-      alert("[ios-fullscreen] " + stage + (detail ? "\n" + detail : ""));
-    }
   } catch (e) {}
 }
 try {
@@ -401,6 +379,20 @@ function syncIOSVideoFullscreen(isFullscreen) {
     },
     isFullscreen ? 120 : 220,
   );
+}
+
+function setIOSCustomVideoFullscreen(playerEl, isFullscreen) {
+  if (!playerEl) return;
+  if (isFullscreen) {
+    iosCustomFullscreenPlayer = playerEl;
+    playerEl.classList.add("ios-video-fullscreen");
+  } else {
+    if (iosCustomFullscreenPlayer) {
+      iosCustomFullscreenPlayer.classList.remove("ios-video-fullscreen");
+    }
+    playerEl.classList.remove("ios-video-fullscreen");
+    iosCustomFullscreenPlayer = null;
+  }
 }
 
 function bindIOSNativeVideoFullscreenEvents(candidates, onEnter, onExit) {
@@ -1984,7 +1976,6 @@ function page_initialize() {
             navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
             window.document.domain.indexOf("leaders") < 0
           ) {
-            var fullscreenAssistTimer = null;
             var fullscreenEnter = function () {
               if (isIOSVideoFullscreen) return;
               logIOSFullscreenDebug("native-enter", {
@@ -1992,6 +1983,7 @@ function page_initialize() {
                 mid: mid,
               });
               isIOSVideoFullscreen = true;
+              setIOSCustomVideoFullscreen(player.el_, true);
               _disconnectPageImageObserver();
               _releaseInactivePageImages(pageIndex);
               syncIOSVideoFullscreen(true);
@@ -2003,6 +1995,7 @@ function page_initialize() {
                 mid: mid,
               });
               isIOSVideoFullscreen = false;
+              setIOSCustomVideoFullscreen(player.el_, false);
               syncIOSVideoFullscreen(false);
             };
             var mediaCandidates = [
@@ -2052,25 +2045,34 @@ function page_initialize() {
               !fullscreenButton.getAttribute("data-ios-fullscreen-assist-bound")
             ) {
               fullscreenButton.setAttribute("data-ios-fullscreen-assist-bound", "1");
-              var onFullscreenButtonPress = function () {
+              var onFullscreenButtonPress = function (event) {
+                if (event) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  if (typeof event.stopImmediatePropagation === "function") {
+                    event.stopImmediatePropagation();
+                  }
+                }
                 logIOSFullscreenDebug("fullscreen-button-press", {
                   currentPage: pageIndex,
                   mid: mid,
                 });
-                clearTimeout(fullscreenAssistTimer);
-                fullscreenAssistTimer = setTimeout(function () {
-                  if (
-                    !isIOSVideoFullscreen &&
-                    mediaCandidates.some(function (candidate) {
-                      return !!candidate && !!candidate.webkitDisplayingFullscreen;
-                    }) === false
-                  ) {
-                    fullscreenEnter();
-                  }
-                }, 220);
+                if (isIOSVideoFullscreen) {
+                  fullscreenExit();
+                } else {
+                  fullscreenEnter();
+                }
               };
-              fullscreenButton.addEventListener("touchend", onFullscreenButtonPress);
-              fullscreenButton.addEventListener("click", onFullscreenButtonPress);
+              fullscreenButton.addEventListener(
+                "touchend",
+                onFullscreenButtonPress,
+                true,
+              );
+              fullscreenButton.addEventListener(
+                "click",
+                onFullscreenButtonPress,
+                true,
+              );
             }
 
             var onIOSPageResume = function () {
