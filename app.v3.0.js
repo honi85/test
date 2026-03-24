@@ -1424,11 +1424,15 @@ function page_initialize() {
         return;
       }
 
-      if (autoPlay && (process[realIndex] !== 1 || isEnd)) {
-        swiper.autoplay.pause(false, true);
-        $(".autoplay-progress").hide();
+      if (autoPlay > 0) {
+        if (process[realIndex] !== 1 || isEnd) {
+          swiper.autoplay.pause(false, true);
+          $(".autoplay-progress").hide();
+        } else {
+          $(".autoplay-progress").show();
+        }
       } else {
-        $(".autoplay-progress").show();
+        $(".autoplay-progress").hide();
       }
       setPageIndex(nextPageId);
       setProcess(realIndex, process[realIndex]);
