@@ -38,10 +38,14 @@ var learnerComp = ScormGet("cmi.learner_comp") || "";
 
 var pageIds = [];
 var moduleIds = [];
+var modulePageIndexMap = {};
+var pageModuleMap = {};
+var pagePassiveModuleElementsMap = {};
 
 var process = [];
 var queues = [];
 var isQueue = false;
+var totalProcessSum = 0;
 
 var swiper = undefined;
 var isSwipe = false;
@@ -238,6 +242,16 @@ function setVideoWatermarkVisibility(isVisible) {
   for (var i = 0; i < 3; i++) {
     $("#vwm_unique_" + i).css("visibility", isVisible ? "visible" : "hidden");
   }
+}
+
+function getSafeRequestedScormDiffTime() {
+  try {
+    if (typeof getRequestedScormDiffTime === "function") {
+      var diff = Number(getRequestedScormDiffTime());
+      return Number.isFinite(diff) ? diff : 0;
+    }
+  } catch (e) {}
+  return 0;
 }
 
 var _c = $("#details").val();
@@ -533,10 +547,21 @@ var html_intfs = {};
 // iframe 기반 문서 모듈과 부모 창 사이 메시지를 받아 진행률과 전체화면 상태를 반영한다.
 $(window).on("message onmessage", function (e) {
   var data = e.originalEvent.data; // Should work.
+  var source = e.originalEvent.source;
   if (typeof data !== "string") return;
   if (data.startsWith("$DOC_SIGHT$")) {
     var json = data.substring(11);
-    var raw = JSON.parse(json);
+    var raw = null;
+    try {
+      raw = JSON.parse(json);
+    } catch (err) {
+      return;
+    }
+    if (!raw || typeof raw !== "object") return;
+    if (source && source !== window && source !== window.parent) {
+      var matchedFrame = $("iframe[data-extra='" + raw.extra + "']").get(0);
+      if (!matchedFrame || matchedFrame.contentWindow !== source) return;
+    }
     if (raw.action === "fullscreen") {
       if (document.fullscreenElement) {
         exitFullScrren();
@@ -555,9 +580,13 @@ $(window).on("message onmessage", function (e) {
       }
     }
   } else {
+    var separatorIndex = data.indexOf("/");
+    if (separatorIndex <= 0) return;
     var uuid = data.substring(0, data.indexOf("/"));
     var val = parseInt(data.substring(data.indexOf("/") + 1), 10);
-    window["fn_" + uuid](val);
+    var handler = window["fn_" + uuid];
+    if (typeof handler !== "function" || Number.isNaN(val)) return;
+    handler(val);
   }
 });
 
@@ -566,6 +595,8 @@ function page_initialize() {
   var screenBody = $("#screen_body");
   var pageIdItems = $("[data-page-id]");
   var menus = $(".index-list [data-page-id]");
+  var menuElements = menus.toArray();
+  var menuElementMap = {};
   var pageMoreIndicator = null;
   var pageMoreIndicatorTimer = null;
   var pageMoreObserver = null;
@@ -888,6 +919,8 @@ function page_initialize() {
   // 페이지별 모듈 목록과 모듈의 초기 상태를 수집한다.
   $("#screen_body [data-page-id]").each(function (i, v) {
     var mods = [];
+    var pageId = $(v).attr("data-page-id");
+    var passiveModuleElements = [];
     $(v)
       .find("[data-mod-id]")
       .each((ix, el) => {
@@ -896,13 +929,26 @@ function page_initialize() {
           "video,audio,.module-slide.active,.module-quiz,[data-html-src],[data-extra]",
         ).length;
         mods.push(mid);
+        modulePageIndexMap[mid] = i;
+        if (!isAct) {
+          passiveModuleElements.push(el);
+        }
         if (!moduleExtra[mid]) {
           moduleExtra[mid] = { act: !!isAct, process: 0 };
         }
       });
 
-    pageIds.push($(v).attr("data-page-id"));
+    pageIds.push(pageId);
     moduleIds.push(mods);
+    pageModuleMap[pageId] = mods;
+    pagePassiveModuleElementsMap[pageId] = passiveModuleElements;
+  });
+
+  menus.each(function (i, el) {
+    var menuPageId = $(el).attr("data-page-id");
+    if (menuPageId) {
+      menuElementMap[menuPageId] = el;
+    }
   });
 
   try {
@@ -922,6 +968,7 @@ function page_initialize() {
     for (let i = 0; i < max; i++) {
       rate += process[i] || 0;
     }
+    totalProcessSum = rate;
 
     let finalRate = rate / (max + 0.0);
     ScormSet("cmi.progress_measure", finalRate);
@@ -954,23 +1001,54 @@ function page_initialize() {
   // ===== Module Progress / Completion / Sequential Navigation =====
   // process는 감소시키지 않고 최대값만 유지해 되감기나 재생 위치 변경으로 진도가 후퇴하지 않게 한다.
   function setModuleExtra(mid, val) {
-    const lastModuleId = $("[data-page-id='" + pageIndex + "'] [data-mod-id]")
-      .last()
-      ?.attr("data-mod-id");
+    var currentPageModules = pageModuleMap[pageIndex] || [];
+    const lastModuleId =
+      currentPageModules.length > 0
+        ? currentPageModules[currentPageModules.length - 1]
+        : undefined;
 
-    if (lastModuleId != mid && moduleExtra[mid]?.process === val?.process) {
+    var currentModuleExtra = moduleExtra[mid];
+    var nextProcess =
+      typeof val?.process === "number"
+        ? Math.max(currentModuleExtra?.process || 0, val.process)
+        : currentModuleExtra?.process || 0;
+    var hasMeaningfulDelta =
+      !currentModuleExtra ||
+      Object.keys(val || {}).some(function (key) {
+        if (key === "process") {
+          return currentModuleExtra.process !== nextProcess;
+        }
+        return currentModuleExtra[key] !== val[key];
+      });
+
+    if (!hasMeaningfulDelta) {
       return;
+    }
+
+    if (lastModuleId != mid && currentModuleExtra?.process === nextProcess) {
+      var nonProcessKeys = Object.keys(val || {}).filter(function (key) {
+        return key !== "process";
+      });
+      if (nonProcessKeys.length === 0) {
+        return;
+      }
     }
 
     if (moduleExtra[mid]) {
       moduleExtra[mid] = {
         ...moduleExtra[mid],
         ...val,
-        process:
-          typeof val.process === "number"
-            ? Math.max(moduleExtra[mid].process || 0, val.process)
-            : moduleExtra[mid].process || 0,
+        process: nextProcess,
       };
+    } else {
+      moduleExtra[mid] = {
+        ...val,
+        process: nextProcess,
+      };
+    }
+
+    if (!moduleExtra[mid]) {
+      return;
     }
     // 저장은 즉시 연속 호출하지 않고 잠시 모아서 처리한다.
     _saveSuspendDataDebounced();
@@ -985,35 +1063,29 @@ function page_initialize() {
   // 특정 모듈이 속한 페이지의 평균 진도를 다시 계산한다.
   // 페이지 단위 진도/목차 표시/순차학습 잠금은 모두 이 계산 결과를 기준으로 움직인다.
   function renderModuleExtra(mid) {
-    let nPageOfModule = -1;
-    for (var i = 0; i < moduleIds.length; i++) {
-      var sum = 0;
-      for (var j = 0; j < moduleIds[i].length; j++) {
-        var moduleData = moduleExtra[moduleIds[i][j]];
-        sum += moduleData.process || 0;
+    var pageIx = modulePageIndexMap[mid];
+    if (typeof pageIx !== "number" || !moduleIds[pageIx]) return;
 
-        if (mid === moduleIds[i][j]) {
-          nPageOfModule = i;
-        }
-      }
-
-      if (nPageOfModule === i) {
-        var realProcess = sum / moduleIds[i].length;
-        setProcess(i, realProcess);
-      }
+    var sum = 0;
+    for (var j = 0; j < moduleIds[pageIx].length; j++) {
+      var moduleData = moduleExtra[moduleIds[pageIx][j]];
+      sum += moduleData.process || 0;
     }
+
+    var realProcess = sum / moduleIds[pageIx].length;
+    setProcess(pageIx, realProcess);
   }
 
   // 순차 학습 과정에서는 현재 페이지의 모든 모듈이 완료되어야 다음으로 이동할 수 있다.
   // 페이지 내 모든 모듈의 process가 1인지 확인한다.
   // 목차 완료 아이콘과 순차학습 next 허용 여부는 이 함수 기준으로 맞춘다.
   function isPageComplete(pageId) {
-    var enabled = true;
-    $("[data-page-id='" + pageId + "'] [data-mod-id]").each(function (i, v) {
-      var me = moduleExtra[$(v).attr("data-mod-id")];
-      if ((me ? me.process : 0) !== 1 && enabled) enabled = false;
-    });
-    return enabled;
+    var modules = pageModuleMap[pageId] || [];
+    for (var i = 0; i < modules.length; i++) {
+      var me = moduleExtra[modules[i]];
+      if ((me ? me.process : 0) !== 1) return false;
+    }
+    return true;
   }
 
   // 현재 페이지 완료 여부를 기준으로 다음 페이지 이동 가능 상태를 반환한다.
@@ -1044,14 +1116,16 @@ function page_initialize() {
   // 페이지 단위 진도를 반영하고, SCORM 저장 큐와 목차 UI를 함께 갱신한다.
   function setProcess(id, value) {
     if (value !== 1 && process[id] === value) return;
+    var prevValue = process[id] || 0;
     process[id] = value;
+    totalProcessSum += value - prevValue;
 
     if (!!queues.find((x) => x.id === id && x.value === value)) return;
 
     queues.push({ id, value });
     runQueue();
 
-    reloadProcess();
+    reloadProcess(id);
     if (
       pageIds[id] === pageIndex &&
       value === 1 &&
@@ -1072,18 +1146,25 @@ function page_initialize() {
   }
 
   // 오른쪽 목차의 progress bar와 완료 아이콘 상태를 현재 process 배열 기준으로 다시 그린다.
-  function reloadProcess() {
-    menus.each(function (i, el) {
+  function reloadProcess(targetIndex) {
+    var hasTargetIndex = typeof targetIndex === "number";
+    var start = hasTargetIndex ? targetIndex : 0;
+    var end = hasTargetIndex ? targetIndex + 1 : menuElements.length;
+
+    for (var i = start; i < end; i++) {
+      var el = menuElements[i];
+      if (!el) continue;
       var percent = process[i] || 0;
-      if ($(el).find(".bar").get(0)) {
-        $(el).find(".bar").get(0).style.setProperty("--progress", percent);
+      var bar = el.querySelector(".bar");
+      if (bar) {
+        bar.style.setProperty("--progress", percent);
       }
       $(el).toggleClass("finish", isPageComplete(pageIds[i]));
-    });
+    }
   }
 
   function scrollActiveMenuIntoView(immediate) {
-    var activeMenu = menus.filter("[data-page-id='" + pageIndex + "']").get(0);
+    var activeMenu = menuElementMap[pageIndex];
     if (!activeMenu) return;
 
     var menuScroller =
@@ -1137,12 +1218,7 @@ function page_initialize() {
     ScormSet("cmi.objectives." + item.id + ".progress_measure", item.value);
 
     var max = menus.length;
-    var rate = 0;
-    for (var i = 0; i < max; i++) {
-      rate += process[i] || 0;
-    }
-
-    var finalRate = rate / (max + 0.0);
+    var finalRate = totalProcessSum / (max + 0.0);
     var completionStatus = finalRate >= 1 ? "completed" : "incomplete";
 
     // 최종 진도와 완료 상태는 값이 실제로 바뀐 경우에만 저장한다.
@@ -1492,6 +1568,7 @@ function page_initialize() {
       },
       on: {
         autoplayTimeLeft(s, time, progress) {
+          if (!progressCircle || !progressContent) return;
           progressCircle.style.setProperty("--progress", 1 - progress);
           progressContent.textContent = `${Math.ceil(time / 1000)}s`;
         },
@@ -1584,7 +1661,9 @@ function page_initialize() {
       updateSwipeNavigationVisibility();
       schedulePageMoreIndicatorUpdate();
     });
-    swiper.autoplay.pause();
+    if (swiper.autoplay && typeof swiper.autoplay.pause === "function") {
+      swiper.autoplay.pause();
+    }
     $(".autoplay-progress").hide();
   } else {
     if (!$(".page-item").hasClass("active")) $(".page-item").addClass("active");
@@ -1686,7 +1765,8 @@ function page_initialize() {
   // act=false 모듈만 대상으로 하며, 보이는 영역 계산은 활성 페이지의 실제 viewport를 기준으로 한다.
   function completeVisiblePassiveModules() {
     var viewportBounds = getActivePageViewportBounds();
-    $(".page-item.active .module-item").each(function (ix, el) {
+    var passiveModules = pagePassiveModuleElementsMap[pageIndex] || [];
+    passiveModules.forEach(function (el) {
       var p = el.getBoundingClientRect();
       if (
         p.bottom <= viewportBounds.bottom + 20 &&
@@ -1967,7 +2047,7 @@ function page_initialize() {
                 if (
                   currentTime >= 0 &&
                   currentTime <
-                    player.currentTime() - getRequestedScormDiffTime()
+                    player.currentTime() - getSafeRequestedScormDiffTime()
                 ) {
                   player.currentTime(currentTime);
                 }
@@ -1980,7 +2060,7 @@ function page_initialize() {
                 if (
                   currentTime >= 0 &&
                   currentTime <
-                    player.currentTime() - getRequestedScormDiffTime()
+                    player.currentTime() - getSafeRequestedScormDiffTime()
                 ) {
                   player.currentTime(currentTime);
                 }
