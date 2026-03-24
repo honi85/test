@@ -286,6 +286,13 @@ var iosPendingImageRefreshForce = false;
 var iosPendingImageRefresh = false;
 var iosLastFullscreenSyncState = null;
 window.refreshActivePageImages = null;
+
+function logIOSFullscreenDebug(stage, extra) {
+  if (!isIOSDevice) return;
+  try {
+    console.log("[ios-fullscreen]", stage, extra || "");
+  } catch (e) {}
+}
 try {
   isNextParents = !!window.parent && !!window.parent.nextChangeOnLesson;
   isPrevParents = !!window.parent && !!window.parent.prevChangeONLesson;
@@ -341,11 +348,20 @@ function syncIOSVideoFullscreen(isFullscreen) {
   clearTimeout(iosFullscreenSyncTimer);
   iosFullscreenSyncTimer = setTimeout(
     function () {
+      logIOSFullscreenDebug("sync-start", {
+        isFullscreen: isFullscreen,
+        rotating: isIOSRotating,
+        lastState: iosLastFullscreenSyncState,
+      });
       setIOSFullscreenUI(isFullscreen);
       if (isIOSRotating) return;
       if (iosLastFullscreenSyncState === isFullscreen) return;
       iosLastFullscreenSyncState = isFullscreen;
       try {
+        logIOSFullscreenDebug("postMessage", {
+          message: "toggleiOSMobileFullscreen",
+          isFullscreen: isFullscreen,
+        });
         window.parent.postMessage("toggleiOSMobileFullscreen");
       } catch (e) {}
 
@@ -362,6 +378,37 @@ function syncIOSVideoFullscreen(isFullscreen) {
     },
     isFullscreen ? 120 : 220,
   );
+}
+
+function bindIOSNativeVideoFullscreenEvents(candidates, onEnter, onExit) {
+  var bound = false;
+
+  candidates.forEach(function (candidate) {
+    if (!candidate || !candidate.addEventListener) return;
+    if (candidate.getAttribute && candidate.getAttribute("data-ios-fullscreen-bound")) {
+      bound = true;
+      return;
+    }
+
+    if (candidate.setAttribute) {
+      candidate.setAttribute("data-ios-fullscreen-bound", "1");
+    }
+
+    candidate.addEventListener("webkitbeginfullscreen", onEnter);
+    candidate.addEventListener("webkitendfullscreen", onExit);
+    candidate.addEventListener("webkitpresentationmodechanged", function () {
+      var mode = candidate.webkitPresentationMode || "";
+      logIOSFullscreenDebug("presentation-mode", { mode: mode });
+      if (mode === "fullscreen") {
+        onEnter();
+      } else {
+        onExit();
+      }
+    });
+    bound = true;
+  });
+
+  return bound;
 }
 
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
@@ -1914,19 +1961,59 @@ function page_initialize() {
             navigator.userAgent.match(/iPhone|iPad|like Mac OS X/i) &&
             window.document.domain.indexOf("leaders") < 0
           ) {
-            var mediaEl =
-              player.tech_ && player.tech_.el_ ? player.tech_.el_ : el;
-            if (mediaEl && !mediaEl.getAttribute("data-ios-fullscreen-bound")) {
-              mediaEl.setAttribute("data-ios-fullscreen-bound", "1");
-              mediaEl.addEventListener("webkitbeginfullscreen", function () {
-                isIOSVideoFullscreen = true;
-                _disconnectPageImageObserver();
-                _releaseInactivePageImages(pageIndex);
-                syncIOSVideoFullscreen(true);
+            var fullscreenEnter = function () {
+              if (isIOSVideoFullscreen) return;
+              logIOSFullscreenDebug("native-enter", {
+                currentPage: pageIndex,
+                mid: mid,
               });
-              mediaEl.addEventListener("webkitendfullscreen", function () {
-                isIOSVideoFullscreen = false;
-                syncIOSVideoFullscreen(false);
+              isIOSVideoFullscreen = true;
+              _disconnectPageImageObserver();
+              _releaseInactivePageImages(pageIndex);
+              syncIOSVideoFullscreen(true);
+            };
+            var fullscreenExit = function () {
+              if (!isIOSVideoFullscreen) return;
+              logIOSFullscreenDebug("native-exit", {
+                currentPage: pageIndex,
+                mid: mid,
+              });
+              isIOSVideoFullscreen = false;
+              syncIOSVideoFullscreen(false);
+            };
+            var mediaCandidates = [
+              el,
+              player.tech_ && player.tech_.el_,
+              player.el_ && player.el_.querySelector
+                ? player.el_.querySelector("video")
+                : null,
+            ].filter(Boolean);
+
+            if (
+              !bindIOSNativeVideoFullscreenEvents(
+                mediaCandidates,
+                fullscreenEnter,
+                fullscreenExit,
+              )
+            ) {
+              logIOSFullscreenDebug("fallback-bind", { mid: mid });
+              // iOS 환경인데 native 이벤트를 못 잡는 경우를 대비한 마지막 보조 경로
+              vjs.off("fullscreenchange");
+              vjs.on("fullscreenchange", function () {
+                logIOSFullscreenDebug("vjs-fullscreenchange", {
+                  isFullscreen: vjs.isFullscreen(),
+                  mid: mid,
+                });
+                if (vjs.isFullscreen()) {
+                  fullscreenEnter();
+                } else {
+                  fullscreenExit();
+                }
+              });
+            } else {
+              logIOSFullscreenDebug("native-bind", {
+                mid: mid,
+                candidates: mediaCandidates.length,
               });
             }
           }
