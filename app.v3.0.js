@@ -1561,12 +1561,23 @@ function page_initialize() {
     });
   }
 
+  // near-fit 자동완료는 단일 passive 모듈 페이지에서만 허용한다.
+  // 여러 이미지 모듈이 한 페이지에 있을 때 진입 직후 전체 완료로 찍히는 오탐을 막기 위한 제한이다.
+  function canAutoCompleteNearFitPage() {
+    var modules = $(".page-item.active .module-item");
+    if (modules.length !== 1) return false;
+
+    var mid = modules.first().attr("data-mod-id");
+    return !!mid && !!moduleExtra[mid] && !moduleExtra[mid].act;
+  }
+
   // 스크롤이 거의 필요 없는 페이지(overflow 20px 미만)는 진입 시 바로 자동 완료한다.
   // 사용자가 체감상 "다 본 페이지"인데 1~19px 차이로 progress가 안 오르는 문제를 막기 위한 예외 규칙이다.
   function autoCompleteNearFitModules() {
     var target = getPageMoreScrollTarget();
     var overflow = target ? getScrollHeight(target) - getClientHeight(target) : 0;
     if (
+      canAutoCompleteNearFitPage() &&
       target &&
       overflow > 0 &&
       overflow < 20
