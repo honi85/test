@@ -306,14 +306,10 @@ function setIOSFullscreenUI(isFullscreen) {
     $("#screen_menu button").css("visibility", "hidden");
     $(".swiper-button-prev").css("visibility", "hidden");
     $(".swiper-button-next").css("visibility", "hidden");
-    $("#watermark").css("visibility", "hidden");
-    setVideoWatermarkVisibility(false);
   } else {
     $("#screen_menu button").css("visibility", "visible");
     $(".swiper-button-prev").css("visibility", "visible");
     $(".swiper-button-next").css("visibility", "visible");
-    $("#watermark").css("visibility", "visible");
-    setVideoWatermarkVisibility(true);
   }
   updateSwipeNavigationVisibility();
 }
@@ -1963,9 +1959,6 @@ function page_initialize() {
                 });
               }
               refreshWatermarkText();
-              if (isIOSDevice && isIOSVideoFullscreen) {
-                setVideoWatermarkVisibility(false);
-              }
             }
           }, 0);
 
