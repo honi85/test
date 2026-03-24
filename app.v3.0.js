@@ -292,6 +292,27 @@ function logIOSFullscreenDebug(stage, extra) {
   try {
     console.log("[ios-fullscreen]", stage, extra || "");
   } catch (e) {}
+  try {
+    if (
+      stage === "native-bind" ||
+      stage === "fallback-bind" ||
+      stage === "native-enter" ||
+      stage === "native-exit" ||
+      stage === "vjs-fullscreenchange" ||
+      stage === "sync-start" ||
+      stage === "postMessage"
+    ) {
+      var detail = "";
+      if (extra && typeof extra === "object") {
+        detail = Object.keys(extra)
+          .map(function (key) {
+            return key + ":" + extra[key];
+          })
+          .join(", ");
+      }
+      alert("[ios-fullscreen] " + stage + (detail ? "\n" + detail : ""));
+    }
+  } catch (e) {}
 }
 try {
   isNextParents = !!window.parent && !!window.parent.nextChangeOnLesson;
