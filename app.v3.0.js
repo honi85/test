@@ -286,13 +286,12 @@ var iosPendingImageRefreshForce = false;
 var iosPendingImageRefresh = false;
 var iosLastFullscreenSyncState = null;
 var iosCustomFullscreenPlayer = null;
+var iosFullscreenResumeHandler = null;
+var iosFullscreenVisibilityHandler = null;
 window.refreshActivePageImages = null;
 
 function logIOSFullscreenDebug(stage, extra) {
-  if (!isIOSDevice) return;
-  try {
-    console.log("[ios-fullscreen]", stage, extra || "");
-  } catch (e) {}
+  return;
 }
 try {
   isNextParents = !!window.parent && !!window.parent.nextChangeOnLesson;
@@ -2061,11 +2060,6 @@ function page_initialize() {
                 onFullscreenButtonPress,
                 true,
               );
-              fullscreenButton.addEventListener(
-                "click",
-                onFullscreenButtonPress,
-                true,
-              );
             }
 
             var onIOSPageResume = function () {
@@ -2084,12 +2078,22 @@ function page_initialize() {
                 fullscreenExit();
               }
             };
-            if (!player.el_.getAttribute("data-ios-resume-bound")) {
-              player.el_.setAttribute("data-ios-resume-bound", "1");
-              window.addEventListener("pageshow", onIOSPageResume);
-              document.addEventListener("visibilitychange", function () {
-                if (!document.hidden) onIOSPageResume();
-              });
+            if (!iosFullscreenResumeHandler) {
+              iosFullscreenResumeHandler = function () {
+                onIOSPageResume();
+              };
+              window.addEventListener("pageshow", iosFullscreenResumeHandler);
+            }
+            if (!iosFullscreenVisibilityHandler) {
+              iosFullscreenVisibilityHandler = function () {
+                if (!document.hidden && iosFullscreenResumeHandler) {
+                  iosFullscreenResumeHandler();
+                }
+              };
+              document.addEventListener(
+                "visibilitychange",
+                iosFullscreenVisibilityHandler,
+              );
             }
           }
         });
