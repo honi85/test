@@ -163,13 +163,15 @@ function getPlayerWatermarkHtml(html) {
     return buildStarbucksWatermarkHtml(html);
   }
 
-  return '<div class="no1"><p>' +
+  return (
+    '<div class="no1"><p>' +
     html +
     '</p></div><div class="no2"><p>' +
     html +
     '</p></div><div class="no3"><p>' +
     html +
-    "</p></div>";
+    "</p></div>"
+  );
 }
 
 function ensurePlayerWatermarkOverlay(playerEl) {
@@ -178,7 +180,9 @@ function ensurePlayerWatermarkOverlay(playerEl) {
   var $overlay = $player.children(".player-watermark-overlay").first();
   if ($overlay.length) return $overlay;
 
-  $overlay = $('<div class="player-watermark-overlay" aria-hidden="true"></div>');
+  $overlay = $(
+    '<div class="player-watermark-overlay" aria-hidden="true"></div>',
+  );
   $player.append($overlay);
   return $overlay;
 }
@@ -518,7 +522,10 @@ function bindIOSNativeVideoFullscreenEvents(candidates, onEnter, onExit) {
 
   candidates.forEach(function (candidate) {
     if (!candidate || !candidate.addEventListener) return;
-    if (candidate.getAttribute && candidate.getAttribute("data-ios-fullscreen-bound")) {
+    if (
+      candidate.getAttribute &&
+      candidate.getAttribute("data-ios-fullscreen-bound")
+    ) {
       bound = true;
       return;
     }
@@ -542,6 +549,16 @@ function bindIOSNativeVideoFullscreenEvents(candidates, onEnter, onExit) {
   });
 
   return bound;
+}
+
+function isVideoControlInteractionTarget(target, rootEl) {
+  if (!target || !rootEl) return false;
+  if (target === rootEl) return false;
+  if (typeof target.closest !== "function") return false;
+
+  return !!target.closest(
+    ".vjs-control-bar, .vjs-big-play-button, .vjs-modal-dialog, .vjs-menu, .vjs-button, .vjs-slider",
+  );
 }
 
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
@@ -819,10 +836,13 @@ function page_initialize() {
 
   function shouldShowAutoplayProgress() {
     if (!isSwipe || !swiper || !(autoPlay > 0)) return false;
-    if (!swiper.autoplay || !swiper.autoplay.running || swiper.isEnd) return false;
+    if (!swiper.autoplay || !swiper.autoplay.running || swiper.isEnd)
+      return false;
 
     var activeIndex =
-      typeof swiper.realIndex === "number" ? swiper.realIndex : swiper.activeIndex;
+      typeof swiper.realIndex === "number"
+        ? swiper.realIndex
+        : swiper.activeIndex;
     if (typeof activeIndex !== "number" || activeIndex < 0) return false;
 
     return process[activeIndex] === 1;
@@ -878,7 +898,8 @@ function page_initialize() {
     if (!parent || parent.length === 0) return;
 
     var resultEl =
-      parent.children(".result").get(0) || parent.find(".result").first().get(0);
+      parent.children(".result").get(0) ||
+      parent.find(".result").first().get(0);
     if (!resultEl) return;
 
     setTimeout(function () {
@@ -904,7 +925,8 @@ function page_initialize() {
           target === document.documentElement ||
           target === document.scrollingElement
         ) {
-          nextTop = getScrollTop(document.scrollingElement) + resultRect.top - margin;
+          nextTop =
+            getScrollTop(document.scrollingElement) + resultRect.top - margin;
           scrollToTop(document.scrollingElement, Math.max(0, nextTop));
           return;
         }
@@ -2036,25 +2058,27 @@ function page_initialize() {
 
     parent.toggleClass("has-selection", hasSelection);
 
-    parent.find(".quiz-ul-select li > label, .quiz-ox-select label").each(function () {
-      var label = $(this);
-      var input = label.find("input").first();
-      var value = String(input.val() || "").trim();
-      var isSelected = input.prop("checked");
-      var isAnswer = normalizedAnswers.indexOf(value) > -1;
+    parent
+      .find(".quiz-ul-select li > label, .quiz-ox-select label")
+      .each(function () {
+        var label = $(this);
+        var input = label.find("input").first();
+        var value = String(input.val() || "").trim();
+        var isSelected = input.prop("checked");
+        var isAnswer = normalizedAnswers.indexOf(value) > -1;
 
-      label.toggleClass("is-selected", isSelected);
-      label.toggleClass("is-answer", !!state && isAnswer);
-      label.toggleClass(
-        "is-missed-answer",
-        state === "fail" && isAnswer && !isSelected,
-      );
-      label.toggleClass(
-        "is-wrong-selection",
-        state === "fail" && isSelected && !isAnswer,
-      );
-      label.toggleClass("is-correct-selection", state === "ok" && isSelected);
-    });
+        label.toggleClass("is-selected", isSelected);
+        label.toggleClass("is-answer", !!state && isAnswer);
+        label.toggleClass(
+          "is-missed-answer",
+          state === "fail" && isAnswer && !isSelected,
+        );
+        label.toggleClass(
+          "is-wrong-selection",
+          state === "fail" && isSelected && !isAnswer,
+        );
+        label.toggleClass("is-correct-selection", state === "ok" && isSelected);
+      });
   }
 
   function setQuizValue(mid, vs) {
@@ -2357,7 +2381,10 @@ function page_initialize() {
               fullscreenButton &&
               !fullscreenButton.getAttribute("data-ios-fullscreen-assist-bound")
             ) {
-              fullscreenButton.setAttribute("data-ios-fullscreen-assist-bound", "1");
+              fullscreenButton.setAttribute(
+                "data-ios-fullscreen-assist-bound",
+                "1",
+              );
               var onFullscreenButtonPress = function (event) {
                 if (event) {
                   event.preventDefault();
@@ -2383,12 +2410,48 @@ function page_initialize() {
               );
             }
 
+            if (
+              player.el_ &&
+              !player.el_.getAttribute("data-ios-control-toggle-bound")
+            ) {
+              player.el_.setAttribute("data-ios-control-toggle-bound", "1");
+              player.el_.addEventListener(
+                "touchend",
+                function (event) {
+                  if (
+                    !isIOSVideoFullscreen ||
+                    !iosCustomFullscreenPlayer ||
+                    iosCustomFullscreenPlayer !== player.el_
+                  ) {
+                    return;
+                  }
+
+                  if (
+                    isVideoControlInteractionTarget(event.target, player.el_)
+                  ) {
+                    return;
+                  }
+
+                  if (
+                    player.controlBar &&
+                    typeof player.userActive === "function"
+                  ) {
+                    player.userActive(!player.userActive());
+                  }
+                },
+                false,
+              );
+            }
+
             var onIOSPageResume = function () {
               if (!isIOSVideoFullscreen) return;
               var stillFullscreen = mediaCandidates.some(function (candidate) {
                 if (!candidate) return false;
                 if (candidate.webkitDisplayingFullscreen) return true;
-                return (candidate.webkitPresentationMode || "inline") === "fullscreen";
+                return (
+                  (candidate.webkitPresentationMode || "inline") ===
+                  "fullscreen"
+                );
               });
               logIOSFullscreenDebug("resume-check", {
                 currentPage: pageIndex,
