@@ -561,6 +561,58 @@ function isVideoControlInteractionTarget(target, rootEl) {
   );
 }
 
+function bindIOSControlBarToggleTargets(player) {
+  if (!player || !player.el_) return;
+  if (player.el_.getAttribute("data-ios-control-toggle-bound")) return;
+
+  player.el_.setAttribute("data-ios-control-toggle-bound", "1");
+
+  var toggleHandler = function (event) {
+    if (
+      !isIOSVideoFullscreen ||
+      !iosCustomFullscreenPlayer ||
+      iosCustomFullscreenPlayer !== player.el_
+    ) {
+      return;
+    }
+
+    if (isVideoControlInteractionTarget(event.target, player.el_)) {
+      return;
+    }
+
+    if (player.controlBar && typeof player.userActive === "function") {
+      player.userActive(!player.userActive());
+    }
+  };
+
+  var targets = [
+    player.el_,
+    player.tech_ && player.tech_.el_,
+    player.el_.querySelector ? player.el_.querySelector(".vjs-tech") : null,
+    player.el_.querySelector ? player.el_.querySelector("video") : null,
+    player.el_.querySelector ? player.el_.querySelector(".vjs-poster") : null,
+  ].filter(Boolean);
+
+  targets.forEach(function (target, index) {
+    if (
+      target !== player.el_ &&
+      target.getAttribute &&
+      target.getAttribute("data-ios-control-toggle-bound")
+    ) {
+      return;
+    }
+
+    if (target !== player.el_ && target.setAttribute) {
+      target.setAttribute("data-ios-control-toggle-bound", "1");
+    }
+
+    target.addEventListener("touchend", toggleHandler, false);
+    if (index > 0) {
+      target.addEventListener("click", toggleHandler, false);
+    }
+  });
+}
+
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
 const requestFullScreen = () => {
   if (document.documentElement.requestFullscreen)
@@ -2410,38 +2462,7 @@ function page_initialize() {
               );
             }
 
-            if (
-              player.el_ &&
-              !player.el_.getAttribute("data-ios-control-toggle-bound")
-            ) {
-              player.el_.setAttribute("data-ios-control-toggle-bound", "1");
-              player.el_.addEventListener(
-                "touchend",
-                function (event) {
-                  if (
-                    !isIOSVideoFullscreen ||
-                    !iosCustomFullscreenPlayer ||
-                    iosCustomFullscreenPlayer !== player.el_
-                  ) {
-                    return;
-                  }
-
-                  if (
-                    isVideoControlInteractionTarget(event.target, player.el_)
-                  ) {
-                    return;
-                  }
-
-                  if (
-                    player.controlBar &&
-                    typeof player.userActive === "function"
-                  ) {
-                    player.userActive(!player.userActive());
-                  }
-                },
-                false,
-              );
-            }
+            bindIOSControlBarToggleTargets(player);
 
             var onIOSPageResume = function () {
               if (!isIOSVideoFullscreen) return;
