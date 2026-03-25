@@ -1696,3 +1696,23 @@ body {
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+.video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-control-bar {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+}
+
+.video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-fullscreen-control,
+.video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-picture-in-picture-control {
+  margin-right: calc(env(safe-area-inset-right, 0px) + 20px) !important;
+}
+
+@media (orientation: landscape) {
+  .video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-control-bar {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
+
+  .video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-fullscreen-control,
+  .video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-picture-in-picture-control {
+    margin-right: calc(env(safe-area-inset-right, 0px) + 28px) !important;
+  }
+}
