@@ -885,6 +885,31 @@ body {
   object-fit: contain;
 }
 
+img.is-image-pending {
+  background:
+    linear-gradient(
+      110deg,
+      rgba(236, 239, 243, 0.92) 8%,
+      rgba(247, 249, 251, 0.98) 18%,
+      rgba(236, 239, 243, 0.92) 33%
+    );
+  background-size: 220% 100%;
+  animation: imagePlaceholderShimmer 1.2s linear infinite;
+}
+
+img.is-image-loaded {
+  animation: none;
+}
+
+@keyframes imagePlaceholderShimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
 .swiper-slide.single .module-item.module-docs iframe {
   height: 100vh !important;
   max-height: 100vh;

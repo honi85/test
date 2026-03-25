@@ -258,6 +258,20 @@ function getSafeRequestedScormDiffTime() {
   return 0;
 }
 
+function shouldUseImagePlaceholder(img) {
+  if (!img) return false;
+  var $img = $(img);
+  if (!$img.closest(".module-item").length) return false;
+  if (
+    $img.closest(
+      ".module-file, .module-quiz, .module-link, #screen_menu, .aside",
+    ).length
+  ) {
+    return false;
+  }
+  return true;
+}
+
 var _c = $("#details").val();
 // 학습 본문 HTML을 불러온 뒤 화면/진도 초기화를 시작한다.
 $.ajax("./launch_view.html", {
@@ -290,7 +304,9 @@ $.ajax("./launch_view.html", {
         });
     });
 
-    // 비디오는 캐시 이슈를 피하기 위해 쿼리스트링을 붙여 새로 읽도록 한다.
+    // 영상 로딩 속도 개선을 위해 timestamp 기반 캐시 무효화는 잠시 비활성화한다.
+    // 운영상 동일 파일명으로 영상 교체가 잦아 최신 반영이 꼭 필요해지면 아래 블록을 다시 활성화하면 된다.
+
     $("video").each(function () {
       $(this)
         .find("source")
@@ -324,6 +340,9 @@ $.ajax("./launch_view.html", {
             .attr("decoding", "async")
             .attr("loading", "lazy")
             .removeAttr("src");
+          if (shouldUseImagePlaceholder(this)) {
+            $(this).addClass("is-image-pending");
+          }
         }
       });
 
@@ -337,6 +356,7 @@ var isIOSVideoFullscreen = false;
 var isIOSRotating = false;
 var iosFullscreenSyncTimer = null;
 var iosRotationTimer = null;
+var _pageImageRestoreTimers = [];
 var iosPendingImageRefreshForce = false;
 var iosPendingImageRefresh = false;
 var iosLastFullscreenSyncState = null;
@@ -668,7 +688,8 @@ function ensureIOSFullscreenTapOverlay(player) {
 }
 
 function lockIOSControlToggle(duration) {
-  iosControlToggleLockUntil = Date.now() + (duration || iosControlToggleCooldown);
+  iosControlToggleLockUntil =
+    Date.now() + (duration || iosControlToggleCooldown);
 }
 
 function resetIOSPlayerControlState(player, isFullscreen) {
@@ -1211,8 +1232,7 @@ function page_initialize() {
       window.setModuleExtra(mid, { process: Math.min(progress / 100.0, 1) });
     };
     html_intfs[uuid] = window["fn_" + uuid];
-
-    $(this).attr("src", $(this).attr("data-html-src") + "?name=" + uuid);
+    $(this).attr("data-html-callback", uuid);
   });
 
   if (base.menuHidden) {
@@ -1653,8 +1673,37 @@ function page_initialize() {
   function _loadPageImage(img) {
     if (!img || !img.getAttribute("data-src")) return;
     var $img = $(img);
+    _bindPageImageLoadState(img);
     $img.attr("src", $img.attr("data-src")).removeAttr("data-src");
+    if (img.complete && img.naturalWidth > 0) {
+      _finalizePageImageLoad(img);
+    }
     _resizeImageIfOversized(img);
+  }
+
+  function _finalizePageImageLoad(img) {
+    if (!img) return;
+    if (!shouldUseImagePlaceholder(img)) return;
+    $(img).removeClass("is-image-pending").addClass("is-image-loaded");
+  }
+
+  function _bindPageImageLoadState(img) {
+    if (!img) return;
+    var $img = $(img);
+    if (!shouldUseImagePlaceholder(img)) {
+      $img.removeClass("is-image-pending is-image-loaded");
+      $img.off(".lcmsImageState");
+      return;
+    }
+    $img.removeClass("is-image-loaded").addClass("is-image-pending");
+    $img.off(".lcmsImageState");
+    $img
+      .one("load.lcmsImageState", function () {
+        _finalizePageImageLoad(this);
+      })
+      .one("error.lcmsImageState", function () {
+        $(this).removeClass("is-image-pending").addClass("is-image-loaded");
+      });
   }
 
   function _disconnectPageImageObserver() {
@@ -1662,6 +1711,13 @@ function page_initialize() {
       _pageImageObserver.disconnect();
       _pageImageObserver = null;
     }
+  }
+
+  function _clearPendingPageImageRestoreTimers() {
+    _pageImageRestoreTimers.forEach(function (timerId) {
+      clearTimeout(timerId);
+    });
+    _pageImageRestoreTimers = [];
   }
 
   // iOS에서는 실제 스크롤 컨테이너를 root로 써서 화면 근처 이미지만 제한적으로 로드한다.
@@ -1740,6 +1796,9 @@ function page_initialize() {
             .attr("data-origin-src", originSrc)
             .removeAttr("src")
             .removeAttr("data-resized");
+          if (shouldUseImagePlaceholder(img)) {
+            $(img).removeClass("is-image-loaded").addClass("is-image-pending");
+          }
         }
         if (_pageImageObserver) {
           _pageImageObserver.unobserve(img);
@@ -1766,9 +1825,23 @@ function page_initialize() {
   // 현재 페이지의 이미지만 복원한다. iOS에서는 배치 단위로 나눠 붙인다.
   function _restorePageImages(nowPage) {
     var imgs = nowPage.find("img[data-src]").toArray();
+    _clearPendingPageImageRestoreTimers();
     if (!isIOSDevice) {
-      imgs.forEach(function (img) {
+      var eagerCount = 3;
+      var batchSize = 4;
+      var batchDelay = 40;
+
+      imgs.slice(0, eagerCount).forEach(function (img) {
         _loadPageImage(img);
+      });
+      imgs.slice(eagerCount).forEach(function (img, index) {
+        var timerId = setTimeout(
+          function () {
+            _loadPageImage(img);
+          },
+          Math.floor(index / batchSize) * batchDelay,
+        );
+        _pageImageRestoreTimers.push(timerId);
       });
       return;
     }
@@ -1791,6 +1864,9 @@ function page_initialize() {
           .attr("data-origin-src", originSrc)
           .removeAttr("src")
           .removeAttr("data-resized");
+        if (shouldUseImagePlaceholder(this)) {
+          $img.removeClass("is-image-loaded").addClass("is-image-pending");
+        }
       },
     );
   }
@@ -1805,6 +1881,14 @@ function page_initialize() {
 
     // 현재 페이지의 이미지를 복원하고 필요하면 축소본으로 교체한다.
     _restorePageImages(nowPage);
+
+    // 외부 HTML/iframe 모듈은 현재 페이지 진입 시점에만 로드한다.
+    nowPage.find("[data-html-src]:not([src])").each(function () {
+      var callbackName = $(this).attr("data-html-callback");
+      var src = $(this).attr("data-html-src");
+      if (!src || !callbackName) return;
+      $(this).attr("src", src + "?name=" + callbackName);
+    });
 
     // 비디오는 현재 페이지 진입 시점에만 실제 src를 붙인다.
     nowPage.find("video source:not([src])").each(function (v, el) {
@@ -2373,13 +2457,16 @@ function page_initialize() {
 
   // 비디오/오디오 플레이어 초기화, 탐색 제한, 워터마크, 자동 재생 제어를 담당한다.
   function videoInit(nowPage) {
+    var scope = nowPage && nowPage.length ? nowPage : $(document);
+
     $("video").attr({
       "webkit-playsinline": true,
       webkitplaysinline: true,
       playsinline: true,
     });
 
-    $("video.applyed:not(.video-js)")
+    scope
+      .find("video.applyed:not(.video-js)")
       .addClass("video-js")
       .each((ix, el) => {
         const args = {
