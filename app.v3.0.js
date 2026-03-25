@@ -652,7 +652,20 @@ function ensureIOSFullscreenTapOverlay(player) {
     iosControlToggleLockUntil = now + iosControlToggleCooldown;
 
     if (typeof player.userActive === "function") {
-      player.userActive(!player.userActive());
+      var nextActive = !player.userActive();
+      if (nextActive) {
+        player.userActive(true);
+      } else {
+        setTimeout(function () {
+          if (
+            isIOSVideoFullscreen &&
+            iosCustomFullscreenPlayer === player.el_ &&
+            typeof player.userActive === "function"
+          ) {
+            player.userActive(false);
+          }
+        }, 60);
+      }
     }
 
     if (event) {
