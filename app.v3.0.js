@@ -337,6 +337,10 @@ var iosPendingImageRefreshForce = false;
 var iosPendingImageRefresh = false;
 var iosLastFullscreenSyncState = null;
 var iosCustomFullscreenPlayer = null;
+var iosCustomFullscreenLayer = null;
+var iosCustomFullscreenPlaceholder = null;
+var iosCustomFullscreenParent = null;
+var iosCustomFullscreenNextSibling = null;
 var iosFullscreenResumeHandler = null;
 var iosFullscreenVisibilityHandler = null;
 window.refreshActivePageImages = null;
@@ -429,17 +433,83 @@ function syncIOSVideoFullscreen(isFullscreen) {
 
 function setIOSCustomVideoFullscreen(playerEl, isFullscreen) {
   if (!playerEl) return;
+
+  var ensureIOSCustomFullscreenLayer = function () {
+    if (iosCustomFullscreenLayer && iosCustomFullscreenLayer.length) {
+      return iosCustomFullscreenLayer;
+    }
+
+    iosCustomFullscreenLayer = $(
+      '<div id="ios_custom_video_fullscreen_layer" aria-hidden="true"></div>',
+    );
+    $("body").append(iosCustomFullscreenLayer);
+    return iosCustomFullscreenLayer;
+  };
+
   if (isFullscreen) {
+    if (iosCustomFullscreenPlayer === playerEl) {
+      $("#root").addClass("ios-video-fullscreen-on");
+      playerEl.classList.add("ios-video-fullscreen");
+      return;
+    }
+
+    var $layer = ensureIOSCustomFullscreenLayer();
+    iosCustomFullscreenParent = playerEl.parentNode || null;
+    iosCustomFullscreenNextSibling = playerEl.nextSibling || null;
+    iosCustomFullscreenPlaceholder = document.createComment(
+      "ios-custom-fullscreen-player",
+    );
+    if (iosCustomFullscreenParent) {
+      iosCustomFullscreenParent.insertBefore(
+        iosCustomFullscreenPlaceholder,
+        playerEl,
+      );
+    }
+
     iosCustomFullscreenPlayer = playerEl;
     $("#root").addClass("ios-video-fullscreen-on");
+    $layer.addClass("active").append(playerEl);
     playerEl.classList.add("ios-video-fullscreen");
   } else {
-    if (iosCustomFullscreenPlayer) {
-      iosCustomFullscreenPlayer.classList.remove("ios-video-fullscreen");
+    var playerToRestore = iosCustomFullscreenPlayer || playerEl;
+    if (playerToRestore) {
+      playerToRestore.classList.remove("ios-video-fullscreen");
     }
-    playerEl.classList.remove("ios-video-fullscreen");
+    if (
+      playerToRestore &&
+      iosCustomFullscreenParent &&
+      iosCustomFullscreenPlaceholder &&
+      iosCustomFullscreenPlaceholder.parentNode === iosCustomFullscreenParent
+    ) {
+      iosCustomFullscreenParent.insertBefore(
+        playerToRestore,
+        iosCustomFullscreenPlaceholder,
+      );
+      iosCustomFullscreenPlaceholder.parentNode.removeChild(
+        iosCustomFullscreenPlaceholder,
+      );
+    } else if (
+      playerToRestore &&
+      iosCustomFullscreenParent &&
+      iosCustomFullscreenNextSibling &&
+      iosCustomFullscreenNextSibling.parentNode === iosCustomFullscreenParent
+    ) {
+      iosCustomFullscreenParent.insertBefore(
+        playerToRestore,
+        iosCustomFullscreenNextSibling,
+      );
+    } else if (playerToRestore && iosCustomFullscreenParent) {
+      iosCustomFullscreenParent.appendChild(playerToRestore);
+    }
+
+    if (iosCustomFullscreenLayer && iosCustomFullscreenLayer.length) {
+      iosCustomFullscreenLayer.removeClass("active");
+    }
     $("#root").removeClass("ios-video-fullscreen-on");
     iosCustomFullscreenPlayer = null;
+    iosCustomFullscreenPlaceholder = null;
+    iosCustomFullscreenParent = null;
+    iosCustomFullscreenNextSibling = null;
   }
 }
 
