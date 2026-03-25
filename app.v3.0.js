@@ -345,6 +345,7 @@ var iosCustomFullscreenLayer = null;
 var iosCustomFullscreenPlaceholder = null;
 var iosCustomFullscreenParent = null;
 var iosCustomFullscreenNextSibling = null;
+var iosControlToggleLockUntil = 0;
 var iosFullscreenResumeHandler = null;
 var iosFullscreenVisibilityHandler = null;
 window.refreshActivePageImages = null;
@@ -568,6 +569,7 @@ function bindIOSControlBarToggleTargets(player) {
   player.el_.setAttribute("data-ios-control-toggle-bound", "1");
 
   var toggleHandler = function (event) {
+    var now = Date.now();
     if (
       !isIOSVideoFullscreen ||
       !iosCustomFullscreenPlayer ||
@@ -580,8 +582,17 @@ function bindIOSControlBarToggleTargets(player) {
       return;
     }
 
+    if (now < iosControlToggleLockUntil) {
+      return;
+    }
+    iosControlToggleLockUntil = now + 320;
+
     if (player.controlBar && typeof player.userActive === "function") {
       player.userActive(!player.userActive());
+    }
+
+    if (event && typeof event.stopPropagation === "function") {
+      event.stopPropagation();
     }
   };
 
@@ -607,9 +618,6 @@ function bindIOSControlBarToggleTargets(player) {
     }
 
     target.addEventListener("touchend", toggleHandler, false);
-    if (index > 0) {
-      target.addEventListener("click", toggleHandler, false);
-    }
   });
 }
 
