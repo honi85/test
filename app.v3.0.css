@@ -1708,7 +1708,7 @@ body {
 
 @media (orientation: landscape) {
   .video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-control-bar {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+    bottom: 0;
   }
 
   .video-js.vjs-fullscreen:not(.ios-video-fullscreen) .vjs-fullscreen-control,
