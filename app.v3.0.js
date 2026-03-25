@@ -2536,6 +2536,11 @@ function page_initialize() {
                 onFullscreenButtonPress,
                 true,
               );
+              fullscreenButton.addEventListener(
+                "click",
+                onFullscreenButtonPress,
+                true,
+              );
             }
 
             ensureIOSFullscreenTapOverlay(player);
