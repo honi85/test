@@ -651,22 +651,7 @@ function ensureIOSFullscreenTapOverlay(player) {
     }
     iosControlToggleLockUntil = now + iosControlToggleCooldown;
 
-    if (typeof player.userActive === "function") {
-      var nextActive = !player.userActive();
-      if (nextActive) {
-        player.userActive(true);
-      } else {
-        setTimeout(function () {
-          if (
-            isIOSVideoFullscreen &&
-            iosCustomFullscreenPlayer === player.el_ &&
-            typeof player.userActive === "function"
-          ) {
-            player.userActive(false);
-          }
-        }, 60);
-      }
-    }
+    player.el_.classList.toggle("ios-controls-hidden");
 
     if (event) {
       if (typeof event.preventDefault === "function") event.preventDefault();
@@ -686,18 +671,10 @@ function lockIOSControlToggle(duration) {
 }
 
 function resetIOSPlayerControlState(player, isFullscreen) {
-  if (!player || typeof player.userActive !== "function") return;
+  if (!player || !player.el_) return;
 
   lockIOSControlToggle(isFullscreen ? 600 : 700);
-  player.userActive(true);
-
-  if (!isFullscreen) {
-    setTimeout(function () {
-      if (typeof player.userActive === "function") {
-        player.userActive(true);
-      }
-    }, 120);
-  }
+  player.el_.classList.remove("ios-controls-hidden");
 }
 
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리

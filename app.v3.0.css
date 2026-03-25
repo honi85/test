@@ -1687,3 +1687,12 @@ body {
 .video-js.ios-video-fullscreen .vjs-menu {
   z-index: 3;
 }
+
+.video-js.ios-video-fullscreen.ios-controls-hidden .vjs-control-bar,
+.video-js.ios-video-fullscreen.ios-controls-hidden .vjs-big-play-button,
+.video-js.ios-video-fullscreen.ios-controls-hidden .vjs-modal-dialog,
+.video-js.ios-video-fullscreen.ios-controls-hidden .vjs-menu {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
