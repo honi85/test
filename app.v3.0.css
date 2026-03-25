@@ -1659,3 +1659,31 @@ body {
   height: 100% !important;
   object-fit: contain;
 }
+
+.video-js .ios-fullscreen-tap-overlay {
+  display: none;
+}
+
+.video-js.ios-video-fullscreen .ios-fullscreen-tap-overlay {
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 72px;
+  display: block;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: transparent;
+  z-index: 2;
+  pointer-events: auto;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.video-js.ios-video-fullscreen .vjs-control-bar,
+.video-js.ios-video-fullscreen .vjs-big-play-button,
+.video-js.ios-video-fullscreen .vjs-modal-dialog,
+.video-js.ios-video-fullscreen .vjs-menu {
+  z-index: 3;
+}

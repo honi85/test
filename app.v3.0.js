@@ -621,6 +621,52 @@ function bindIOSControlBarToggleTargets(player) {
   });
 }
 
+function ensureIOSFullscreenTapOverlay(player) {
+  if (!player || !player.el_) return;
+
+  var existing =
+    player.el_.querySelector &&
+    player.el_.querySelector(".ios-fullscreen-tap-overlay");
+  if (existing) return existing;
+
+  var overlay = document.createElement("button");
+  overlay.type = "button";
+  overlay.className = "ios-fullscreen-tap-overlay";
+  overlay.setAttribute("aria-hidden", "true");
+  overlay.setAttribute("tabindex", "-1");
+
+  var onToggle = function (event) {
+    if (
+      !isIOSVideoFullscreen ||
+      !iosCustomFullscreenPlayer ||
+      iosCustomFullscreenPlayer !== player.el_
+    ) {
+      return;
+    }
+
+    var now = Date.now();
+    if (now < iosControlToggleLockUntil) {
+      return;
+    }
+    iosControlToggleLockUntil = now + 320;
+
+    if (typeof player.userActive === "function") {
+      player.userActive(!player.userActive());
+    }
+
+    if (event) {
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      if (typeof event.stopPropagation === "function") event.stopPropagation();
+    }
+  };
+
+  overlay.addEventListener("touchend", onToggle, false);
+  overlay.addEventListener("click", onToggle, false);
+
+  player.el_.appendChild(overlay);
+  return overlay;
+}
+
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
 const requestFullScreen = () => {
   if (document.documentElement.requestFullscreen)
@@ -2470,7 +2516,7 @@ function page_initialize() {
               );
             }
 
-            bindIOSControlBarToggleTargets(player);
+            ensureIOSFullscreenTapOverlay(player);
 
             var onIOSPageResume = function () {
               if (!isIOSVideoFullscreen) return;
