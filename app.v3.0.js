@@ -346,6 +346,7 @@ var iosCustomFullscreenPlaceholder = null;
 var iosCustomFullscreenParent = null;
 var iosCustomFullscreenNextSibling = null;
 var iosControlToggleLockUntil = 0;
+var iosControlToggleCooldown = 450;
 var iosFullscreenResumeHandler = null;
 var iosFullscreenVisibilityHandler = null;
 window.refreshActivePageImages = null;
@@ -648,7 +649,7 @@ function ensureIOSFullscreenTapOverlay(player) {
     if (now < iosControlToggleLockUntil) {
       return;
     }
-    iosControlToggleLockUntil = now + 320;
+    iosControlToggleLockUntil = now + iosControlToggleCooldown;
 
     if (typeof player.userActive === "function") {
       player.userActive(!player.userActive());
@@ -665,6 +666,25 @@ function ensureIOSFullscreenTapOverlay(player) {
 
   player.el_.appendChild(overlay);
   return overlay;
+}
+
+function lockIOSControlToggle(duration) {
+  iosControlToggleLockUntil = Date.now() + (duration || iosControlToggleCooldown);
+}
+
+function resetIOSPlayerControlState(player, isFullscreen) {
+  if (!player || typeof player.userActive !== "function") return;
+
+  lockIOSControlToggle(isFullscreen ? 600 : 700);
+  player.userActive(true);
+
+  if (!isFullscreen) {
+    setTimeout(function () {
+      if (typeof player.userActive === "function") {
+        player.userActive(true);
+      }
+    }, 120);
+  }
 }
 
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
@@ -2426,6 +2446,7 @@ function page_initialize() {
                 mid: mid,
               });
               isIOSVideoFullscreen = true;
+              resetIOSPlayerControlState(player, true);
               setIOSCustomVideoFullscreen(player.el_, true);
               _disconnectPageImageObserver();
               _releaseInactivePageImages(pageIndex);
@@ -2439,6 +2460,7 @@ function page_initialize() {
               });
               isIOSVideoFullscreen = false;
               setIOSCustomVideoFullscreen(player.el_, false);
+              resetIOSPlayerControlState(player, false);
               syncIOSVideoFullscreen(false);
             };
             var mediaCandidates = [
