@@ -347,6 +347,7 @@ var iosCustomFullscreenParent = null;
 var iosCustomFullscreenNextSibling = null;
 var iosControlToggleLockUntil = 0;
 var iosControlToggleCooldown = 450;
+var iosFullscreenButtonLockUntil = 0;
 var iosFullscreenResumeHandler = null;
 var iosFullscreenVisibilityHandler = null;
 window.refreshActivePageImages = null;
@@ -675,6 +676,39 @@ function resetIOSPlayerControlState(player, isFullscreen) {
 
   lockIOSControlToggle(isFullscreen ? 600 : 700);
   player.el_.classList.remove("ios-controls-hidden");
+}
+
+function handleIOSFullscreenButtonToggle(player, onEnter, onExit, event) {
+  var now = Date.now();
+  if (now < iosFullscreenButtonLockUntil) {
+    if (event) {
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      if (typeof event.stopPropagation === "function") event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation();
+      }
+    }
+    return;
+  }
+  iosFullscreenButtonLockUntil = now + 500;
+
+  if (event) {
+    if (typeof event.preventDefault === "function") event.preventDefault();
+    if (typeof event.stopPropagation === "function") event.stopPropagation();
+    if (typeof event.stopImmediatePropagation === "function") {
+      event.stopImmediatePropagation();
+    }
+  }
+
+  if (player && player.el_) {
+    player.el_.classList.remove("ios-controls-hidden");
+  }
+
+  if (isIOSVideoFullscreen) {
+    onExit();
+  } else {
+    onEnter();
+  }
 }
 
 // 브라우저 또는 앱 컨테이너 환경에 맞는 전체화면 진입 처리
@@ -2504,22 +2538,16 @@ function page_initialize() {
                 "1",
               );
               var onFullscreenButtonPress = function (event) {
-                if (event) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  if (typeof event.stopImmediatePropagation === "function") {
-                    event.stopImmediatePropagation();
-                  }
-                }
                 logIOSFullscreenDebug("fullscreen-button-press", {
                   currentPage: pageIndex,
                   mid: mid,
                 });
-                if (isIOSVideoFullscreen) {
-                  fullscreenExit();
-                } else {
-                  fullscreenEnter();
-                }
+                handleIOSFullscreenButtonToggle(
+                  player,
+                  fullscreenEnter,
+                  fullscreenExit,
+                  event,
+                );
               };
               fullscreenButton.addEventListener(
                 "touchend",
