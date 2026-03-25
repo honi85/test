@@ -12,14 +12,14 @@
   --ui-muted: #6b7d75;
   --ui-panel: #f7faf8;
   --ui-panel-strong: #edf4f0;
-  --toc-bg: rgba(245, 241, 234, 0.96);
-  --toc-line: #ddd2c5;
-  --toc-line-strong: #d1c4b5;
-  --toc-text: #58524b;
-  --toc-text-strong: #2f2b27;
-  --toc-active-bg: #e8ded1;
-  --toc-active-mark: #6f6254;
-  --toc-section-bg: #ece4d8;
+  --toc-bg: rgba(248, 249, 251, 0.96);
+  --toc-line: #e5e7eb;
+  --toc-line-strong: #d8dde4;
+  --toc-text: #5f6772;
+  --toc-text-strong: #2f343b;
+  --toc-active-bg: #eef2f6;
+  --toc-active-mark: #4b5563;
+  --toc-section-bg: #f1f3f5;
   --shell-bg: #f6f2ec;
   --shell-panel: rgba(255, 255, 255, 0.74);
   --shell-shadow: 0 24px 48px rgba(34, 29, 24, 0.08);
@@ -450,9 +450,9 @@ body {
   width: 1px;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.36) 0%,
-    rgba(196, 182, 165, 0.35) 38%,
-    rgba(196, 182, 165, 0.62) 100%
+    rgba(255, 255, 255, 0.56) 0%,
+    rgba(222, 227, 233, 0.42) 38%,
+    rgba(216, 221, 228, 0.74) 100%
   );
 }
 
@@ -465,9 +465,9 @@ body {
   width: 1px;
   background: linear-gradient(
     180deg,
-    rgba(255, 255, 255, 0.7) 0%,
-    rgba(210, 202, 192, 0.92) 14%,
-    rgba(205, 196, 185, 0.88) 100%
+    rgba(255, 255, 255, 0.78) 0%,
+    rgba(224, 229, 235, 0.92) 14%,
+    rgba(214, 220, 227, 0.9) 100%
   );
   box-shadow: 10px 0 26px rgba(34, 29, 24, 0.04);
   pointer-events: none;
@@ -486,8 +486,8 @@ body {
   top: 16px;
   width: 40px;
   height: 40px;
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid rgba(215, 208, 199, 0.8);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(220, 225, 232, 0.92);
   border-radius: 14px;
   padding: 0;
   display: flex;
@@ -513,7 +513,7 @@ body {
 }
 
 #root > .aside > button:active {
-  background: rgba(247, 244, 239, 0.96);
+  background: rgba(243, 246, 249, 0.96);
   transform: translateX(0);
 }
 
@@ -528,10 +528,10 @@ body {
   width: 14px;
   height: 1.5px;
   border-radius: 999px;
-  background: #60645f;
+  background: #5f6772;
   box-shadow:
-    0 -5px 0 #60645f,
-    0 5px 0 #60645f;
+    0 -5px 0 #5f6772,
+    0 5px 0 #5f6772;
   transition:
     transform 0.18s ease,
     box-shadow 0.18s ease,
@@ -545,8 +545,8 @@ body {
   position: absolute;
   width: 9px;
   height: 9px;
-  border-top: 1.5px solid #60645f;
-  border-right: 1.5px solid #60645f;
+  border-top: 1.5px solid #5f6772;
+  border-right: 1.5px solid #5f6772;
   transform: translateX(2px) rotate(45deg);
   opacity: 0;
   transition:
