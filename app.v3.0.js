@@ -842,6 +842,7 @@ function page_initialize() {
   var pageMoreObservedLoadHandler = null;
   var imageViewer = null;
   var imageViewerImg = null;
+  var imageZoomContexts = [];
 
   function ensureImageViewer() {
     if (imageViewer && imageViewer.length) return imageViewer;
@@ -893,6 +894,80 @@ function page_initialize() {
         imageViewerImg.attr("src", "");
       }
     }, 180);
+  }
+
+  function getZoomableImageSource($img) {
+    return $img.attr("data-origin-src") || $img.attr("src") || $img.attr("data-src");
+  }
+
+  function isZoomableImageElement(img) {
+    if (!img) return false;
+    var $img = $(img);
+    if ($img.closest("#image_viewer, .index-item, button").length) return false;
+
+    var rect = img.getBoundingClientRect();
+    if (rect.width < 48 || rect.height < 48) return false;
+
+    return !!getZoomableImageSource($img);
+  }
+
+  function bindImageZoomContext(root, isFrameDocument) {
+    if (!root) return;
+
+    var $root = root.jquery ? root : $(root);
+    if (!$root.length) return;
+    if ($root.data("imageZoomBound")) return;
+    $root.data("imageZoomBound", 1);
+    imageZoomContexts.push($root);
+
+    $root.on("click.imageZoom", "img", function (e) {
+      var img = this;
+      var $img = $(img);
+      if (!isZoomableImageElement(img)) return;
+
+      var src = getZoomableImageSource($img);
+      if (!src) return;
+
+      if ($img.closest("#image_viewer, .index-item, button").length) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (typeof e.stopImmediatePropagation === "function") {
+        e.stopImmediatePropagation();
+      }
+
+      openImageViewer(src, $img.attr("alt"));
+    });
+
+    $root.find("img").each(function () {
+      if (!isZoomableImageElement(this)) return;
+      this.style.cursor = "zoom-in";
+    });
+
+    if (!isFrameDocument) return;
+
+    $root.on("load.imageZoom", "img", function () {
+      if (!isZoomableImageElement(this)) return;
+      this.style.cursor = "zoom-in";
+    });
+  }
+
+  function bindIframeImageZoom(frameEl) {
+    if (!frameEl || frameEl.getAttribute("data-image-zoom-bound")) return;
+    frameEl.setAttribute("data-image-zoom-bound", "1");
+
+    var bindFrameDocument = function () {
+      try {
+        var frameDoc = frameEl.contentDocument;
+        if (!frameDoc || !frameDoc.body) return;
+        bindImageZoomContext(frameDoc, true);
+      } catch (err) {
+        // cross-origin iframe은 직접 접근할 수 없으므로 확대 기능을 붙일 수 없다.
+      }
+    };
+
+    frameEl.addEventListener("load", bindFrameDocument);
+    bindFrameDocument();
   }
 
   // ===== More Indicator / Scroll Target =====
@@ -1679,23 +1754,9 @@ function page_initialize() {
   ensurePageMoreIndicator();
 
   // 본문 이미지는 클릭 시 전체 화면 오버레이로 확대해 볼 수 있게 한다.
-  screenBody.on("click", "[data-page-id].active img", function (e) {
-    var img = this;
-    var $img = $(img);
-    var src =
-      $img.attr("data-origin-src") || $img.attr("src") || $img.attr("data-src");
-
-    if (!src) return;
-    if ($img.closest("#image_viewer, .quiz-ul-select label, .index-item, button, a").length) {
-      return;
-    }
-
-    var rect = img.getBoundingClientRect();
-    if (rect.width < 48 || rect.height < 48) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-    openImageViewer(src, $img.attr("alt"));
+  bindImageZoomContext(screenBody, false);
+  $("iframe").each(function () {
+    bindIframeImageZoom(this);
   });
 
   var _loc = ScormGet("cmi.location") || "0_0";
