@@ -840,6 +840,60 @@ function page_initialize() {
   var pageMoreObserver = null;
   var pageMoreObservedPage = null;
   var pageMoreObservedLoadHandler = null;
+  var imageViewer = null;
+  var imageViewerImg = null;
+
+  function ensureImageViewer() {
+    if (imageViewer && imageViewer.length) return imageViewer;
+
+    imageViewer = $(
+      '<div id="image_viewer" aria-hidden="true">' +
+        '<button type="button" class="image-viewer-close" aria-label="이미지 닫기">닫기</button>' +
+        '<div class="image-viewer-stage">' +
+          '<img alt="확대 이미지" />' +
+        "</div>" +
+      "</div>",
+    );
+    imageViewerImg = imageViewer.find("img").first();
+
+    imageViewer.on("click", function (e) {
+      if (
+        $(e.target).is("#image_viewer, .image-viewer-stage, .image-viewer-close")
+      ) {
+        closeImageViewer();
+      }
+    });
+
+    $(document).on("keydown.imageViewer", function (e) {
+      if (e.key === "Escape") {
+        closeImageViewer();
+      }
+    });
+
+    $("body").append(imageViewer);
+    return imageViewer;
+  }
+
+  function openImageViewer(src, alt) {
+    if (!src) return;
+
+    var viewer = ensureImageViewer();
+    imageViewerImg.attr("src", src).attr("alt", alt || "확대 이미지");
+    viewer.addClass("open").attr("aria-hidden", "false");
+    $("body").addClass("image-viewer-open");
+  }
+
+  function closeImageViewer() {
+    if (!imageViewer || !imageViewer.length) return;
+
+    imageViewer.removeClass("open").attr("aria-hidden", "true");
+    $("body").removeClass("image-viewer-open");
+    setTimeout(function () {
+      if (imageViewer && !imageViewer.hasClass("open")) {
+        imageViewerImg.attr("src", "");
+      }
+    }, 180);
+  }
 
   // ===== More Indicator / Scroll Target =====
   // 하단 more 버튼을 한 번만 생성하고 재사용한다.
@@ -1157,6 +1211,69 @@ function page_initialize() {
       top: viewportTop,
       bottom: viewportBottom,
     };
+  }
+
+  // 자동완료는 현재 활성 페이지를 실제로 스크롤한 경우에만 허용한다.
+  // 목차 영역이나 다른 컨테이너의 스크롤 이벤트로 완료 처리되는 오탐을 막는다.
+  function isScrollFromActivePageContext(e) {
+    if (!e || e.type !== "scroll") return false;
+
+    var activePage = $("[data-page-id].active").first().get(0);
+    if (!activePage) return false;
+
+    var target = e.target;
+    var pageScrollTarget = getPageMoreScrollTarget();
+    var docTarget = document.scrollingElement || document.documentElement;
+
+    if (target === activePage || activePage.contains(target)) return true;
+    if (pageScrollTarget && target === pageScrollTarget) return true;
+    if (
+      pageScrollTarget &&
+      pageScrollTarget !== docTarget &&
+      pageScrollTarget.contains &&
+      pageScrollTarget.contains(target)
+    ) {
+      return true;
+    }
+    if (
+      (target === document || target === document.documentElement || target === docTarget) &&
+      (pageScrollTarget === docTarget || pageScrollTarget === activePage)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // 비상호작용 모듈이라도 레이아웃이 아직 0에 가깝거나 화면과 거의 겹치지 않으면
+  // 진입 직후 오탐 완료를 막기 위해 자동완료하지 않는다.
+  function isPassiveModuleReadyToComplete(el, viewportBounds) {
+    if (!el || !viewportBounds) return false;
+
+    var rect = el.getBoundingClientRect();
+    var height = Math.max(rect.height || 0, rect.bottom - rect.top);
+    if (height < 24) return false;
+
+    var visibleTop = Math.max(rect.top, viewportBounds.top);
+    var visibleBottom = Math.min(rect.bottom, viewportBounds.bottom);
+    var visibleHeight = Math.max(0, visibleBottom - visibleTop);
+    if (visibleHeight < 24) return false;
+
+    var viewportHeight = Math.max(0, viewportBounds.bottom - viewportBounds.top);
+    if (viewportHeight <= 0) return false;
+
+    var visibilityRatio = visibleHeight / Math.max(height, 1);
+    var moduleCenter = rect.top + height / 2;
+    var centerInViewport =
+      moduleCenter >= viewportBounds.top && moduleCenter <= viewportBounds.bottom;
+
+    // 화면보다 작은 모듈은 대부분이 보여야 하고,
+    // 화면보다 큰 모듈은 중심점이 viewport 안에 들어온 시점부터 완료 대상으로 본다.
+    if (height <= viewportHeight * 0.9) {
+      return visibilityRatio >= 0.6;
+    }
+
+    return centerInViewport && visibleHeight >= Math.min(240, viewportHeight * 0.5);
   }
 
   // 활성 페이지의 load/DOM 변화를 감시해 more 버튼과 근접 자동완료를 다시 계산한다.
@@ -1560,6 +1677,26 @@ function page_initialize() {
   onResize();
   $(window).on("resize", schedulePageMoreIndicatorUpdate);
   ensurePageMoreIndicator();
+
+  // 본문 이미지는 클릭 시 전체 화면 오버레이로 확대해 볼 수 있게 한다.
+  screenBody.on("click", "[data-page-id].active img", function (e) {
+    var img = this;
+    var $img = $(img);
+    var src =
+      $img.attr("data-origin-src") || $img.attr("src") || $img.attr("data-src");
+
+    if (!src) return;
+    if ($img.closest("#image_viewer, .quiz-ul-select label, .index-item, button, a").length) {
+      return;
+    }
+
+    var rect = img.getBoundingClientRect();
+    if (rect.width < 48 || rect.height < 48) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    openImageViewer(src, $img.attr("alt"));
+  });
 
   var _loc = ScormGet("cmi.location") || "0_0";
   var pageIndex = _loc || pageIdItems.attr("data-page-id");
@@ -2075,11 +2212,7 @@ function page_initialize() {
     var viewportBounds = getActivePageViewportBounds();
     var passiveModules = pagePassiveModuleElementsMap[pageIndex] || [];
     passiveModules.forEach(function (el) {
-      var p = el.getBoundingClientRect();
-      if (
-        p.bottom <= viewportBounds.bottom + 20 &&
-        p.top < viewportBounds.bottom
-      ) {
+      if (isPassiveModuleReadyToComplete(el, viewportBounds)) {
         var mid = $(el).attr("data-mod-id");
         if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
       }
@@ -2127,7 +2260,7 @@ function page_initialize() {
   // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
   // 사용자 스크롤 시 비상호작용 모듈 자동완료와 more 버튼 갱신을 함께 처리한다.
   function onScroll(e) {
-    if (e && e.type === "scroll") {
+    if (isScrollFromActivePageContext(e)) {
       completeVisiblePassiveModules();
     }
     if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
