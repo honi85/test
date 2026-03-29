@@ -1159,6 +1159,69 @@ function page_initialize() {
     };
   }
 
+  // 자동완료는 현재 활성 페이지와 실제로 관련된 스크롤에서만 수행한다.
+  // 목차, 외부 컨테이너, 초기 레이아웃 흔들림으로 들어오는 scroll 이벤트는 제외한다.
+  function isScrollFromActivePageContext(e) {
+    if (!e || e.type !== "scroll") return false;
+
+    var activePage = $("[data-page-id].active").first().get(0);
+    if (!activePage) return false;
+
+    var target = e.target;
+    var pageScrollTarget = getPageMoreScrollTarget();
+    var docTarget = document.scrollingElement || document.documentElement;
+
+    if (target === activePage || (activePage.contains && activePage.contains(target))) {
+      return true;
+    }
+    if (pageScrollTarget && target === pageScrollTarget) return true;
+    if (
+      pageScrollTarget &&
+      pageScrollTarget !== docTarget &&
+      pageScrollTarget.contains &&
+      pageScrollTarget.contains(target)
+    ) {
+      return true;
+    }
+    if (
+      (target === document || target === document.documentElement || target === docTarget) &&
+      (pageScrollTarget === docTarget || pageScrollTarget === activePage)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // passive 모듈이 실제로 충분히 보이는 경우에만 자동완료한다.
+  // 진입 직후 이미지 높이가 아직 덜 잡힌 상태에서는 완료 처리하지 않는다.
+  function isPassiveModuleReadyToComplete(el, viewportBounds) {
+    if (!el || !viewportBounds) return false;
+
+    var rect = el.getBoundingClientRect();
+    var height = Math.max(rect.height || 0, rect.bottom - rect.top);
+    if (height < 24) return false;
+
+    var visibleTop = Math.max(rect.top, viewportBounds.top);
+    var visibleBottom = Math.min(rect.bottom, viewportBounds.bottom);
+    var visibleHeight = Math.max(0, visibleBottom - visibleTop);
+    if (visibleHeight < 24) return false;
+
+    var viewportHeight = Math.max(0, viewportBounds.bottom - viewportBounds.top);
+    if (viewportHeight <= 0) return false;
+
+    var visibilityRatio = visibleHeight / Math.max(height, 1);
+    var moduleCenter = rect.top + height / 2;
+    var centerInViewport =
+      moduleCenter >= viewportBounds.top && moduleCenter <= viewportBounds.bottom;
+
+    if (height <= viewportHeight * 0.9) {
+      return visibilityRatio >= 0.6;
+    }
+
+    return centerInViewport && visibleHeight >= Math.min(240, viewportHeight * 0.5);
+  }
+
   // 활성 페이지의 load/DOM 변화를 감시해 more 버튼과 근접 자동완료를 다시 계산한다.
   function observeActivePageMoreChanges(pageEl) {
     if (pageMoreObserver) {
@@ -2075,11 +2138,7 @@ function page_initialize() {
     var viewportBounds = getActivePageViewportBounds();
     var passiveModules = pagePassiveModuleElementsMap[pageIndex] || [];
     passiveModules.forEach(function (el) {
-      var p = el.getBoundingClientRect();
-      if (
-        p.bottom <= viewportBounds.bottom + 20 &&
-        p.top < viewportBounds.bottom
-      ) {
+      if (isPassiveModuleReadyToComplete(el, viewportBounds)) {
         var mid = $(el).attr("data-mod-id");
         if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
       }
@@ -2127,7 +2186,7 @@ function page_initialize() {
   // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
   // 사용자 스크롤 시 비상호작용 모듈 자동완료와 more 버튼 갱신을 함께 처리한다.
   function onScroll(e) {
-    if (e && e.type === "scroll") {
+    if (isScrollFromActivePageContext(e)) {
       completeVisiblePassiveModules();
     }
     if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
