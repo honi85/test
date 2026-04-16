@@ -13,7 +13,7 @@ if (
   ScormGet = ScormProcessGetValue;
   ScormSet = function (a, b) {
     console.log("ScormSet! ", a, b);
-    ScormProcessSetValue(a, b);
+    return ScormProcessSetValue(a, b);
   };
 } else {
   var prefix = "scorm_" + $("#root").attr("data-code") + "_";
@@ -22,6 +22,7 @@ if (
   };
   ScormSet = function (key, value) {
     localStorage.setItem(prefix + key, value);
+    return true;
   };
 }
 
@@ -59,8 +60,9 @@ function normalizeScormProgressRate(value) {
   var rate = Number(value);
   if (!Number.isFinite(rate)) return 0;
   rate = Math.min(Math.max(rate, 0), 1);
-  // LMS는 0~1 값을 100으로 곱해 표시하므로, 정수 퍼센트가 되도록 소수점 2자리까지만 보낸다.
-  // 반올림하지 않고 버림 처리한다. 예: 0.666 -> 66%
+  // LMS 화면은 progress_measure(0~1)에 100을 곱해 표시한다.
+  // 화면에 소수점이 나오지 않도록 0~1 값은 소수점 2자리에서 버림 처리한다.
+  // 단, 실제 완료가 아닌 값이 100%로 보이지 않도록 1 미만은 최대 0.99까지만 허용한다.
   var floored = Math.floor(rate * 100) / 100;
   return rate < 1 ? Math.min(floored, 0.99) : 1;
 }
@@ -1306,18 +1308,22 @@ function page_initialize() {
       $(this).removeClass("nav-on");
     });
 
-  // suspend_data 저장은 디바운스 처리하고, 페이지 종료 직전에는 즉시 한 번 더 저장한다.
+  // suspend_data는 모듈별 상세 상태다. 평상시에는 짧게 모아서 저장하고,
+  // 종료/탭 숨김 시점에는 대기 중인 변경까지 즉시 저장한다.
   var _suspendDataTimer = null;
+  var _hasPendingSuspendData = false;
   function _saveSuspendDataNow() {
+    _hasPendingSuspendData = false;
+    _suspendDataTimer = null;
     ScormSet("cmi.suspend_data", JSON.stringify(moduleExtra));
   }
   function _saveSuspendDataDebounced() {
+    _hasPendingSuspendData = true;
     clearTimeout(_suspendDataTimer);
     _suspendDataTimer = setTimeout(_saveSuspendDataNow, 300);
   }
   window.addEventListener("beforeunload", function () {
-    clearTimeout(_suspendDataTimer);
-    _saveSuspendDataNow();
+    flushScormProgressNow();
   });
 
   // ===== Module Progress / Completion / Sequential Navigation =====
@@ -1527,26 +1533,13 @@ function page_initialize() {
   // ===== Page Lifecycle / Asset Binding =====
   reloadProcess();
 
-  // SCORM 값은 이전 기록과 비교해 바뀐 경우에만 다시 저장한다.
+  // 전체 진도/완료 상태는 평상시에는 값이 바뀐 경우에만 저장한다.
+  // 종료/복구 동기화에서는 forceWrite=true로 같은 값도 다시 전송해 LMS 목차 누락을 보정한다.
   var _lastFinalRate = null;
   var _lastCompletionStatus = null;
+  var _lastScormFlushAt = 0;
 
-  function runQueue() {
-    if (isQueue) return;
-    if (queues.length === 0) {
-      isQueue = false;
-      return;
-    }
-    isQueue = true;
-    var item = queues[0];
-    queues.splice(0, 1);
-
-    // 페이지별 objective 진행률을 먼저 반영한다.
-    ScormSet(
-      "cmi.objectives." + item.id + ".progress_measure",
-      normalizeScormProgressRate(item.value),
-    );
-
+  function getScormProgressSummary() {
     // process 배열에서 매번 직접 합산해 부동소수점 누적 오차를 방지한다.
     let max = pageIds.length;
     var rateSum = 0;
@@ -1557,22 +1550,110 @@ function page_initialize() {
     // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
     let finalRate = normalizeScormProgressRate(max > 0 ? rateSum / max : 0);
     var completionStatus = finalRate >= 1 ? "completed" : "incomplete";
+    return {
+      finalRate: finalRate,
+      completionStatus: completionStatus,
+    };
+  }
+
+  function writeScormProgressSummary(forceWrite) {
+    var summary = getScormProgressSummary();
 
     // 최종 진도와 완료 상태는 값이 실제로 바뀐 경우에만 저장한다.
-    if (finalRate !== _lastFinalRate) {
-      ScormSet("cmi.progress_measure", finalRate);
-      _lastFinalRate = finalRate;
+    if (forceWrite || summary.finalRate !== _lastFinalRate) {
+      ScormSet("cmi.progress_measure", summary.finalRate);
+      _lastFinalRate = summary.finalRate;
     }
-    if (completionStatus !== _lastCompletionStatus) {
-      ScormSet("cmi.completion_status", completionStatus);
-      _lastCompletionStatus = completionStatus;
+    if (forceWrite || summary.completionStatus !== _lastCompletionStatus) {
+      ScormSet("cmi.completion_status", summary.completionStatus);
+      _lastCompletionStatus = summary.completionStatus;
     }
+  }
+
+  function writeScormProgressItem(item, forceWrite) {
+    if (item) {
+      // LMS 목차는 페이지별 objective progress를 기준으로 표시하는 환경이 있어
+      // 페이지 진도 변경 시 objective를 먼저 보낸다.
+      ScormSet(
+        "cmi.objectives." + item.id + ".progress_measure",
+        normalizeScormProgressRate(item.value),
+      );
+    }
+
+    writeScormProgressSummary(!!forceWrite);
+  }
+
+  function resyncAllScormProgress(forceWrite) {
+    // suspend_data는 저장됐지만 objective SetValue 일부가 누락된 경우를 복구하기 위해
+    // 내부 process 배열을 기준으로 모든 페이지 objective를 다시 전송한다.
+    for (var i = 0; i < pageIds.length; i++) {
+      ScormSet(
+        "cmi.objectives." + i + ".progress_measure",
+        normalizeScormProgressRate(process[i] || 0),
+      );
+    }
+
+    writeScormProgressSummary(!!forceWrite);
+  }
+
+  function runQueue() {
+    // 학습 중에는 기존처럼 페이지 진도 변경을 300ms 간격으로 순차 저장한다.
+    // 이 경로를 유지해야 잦은 스크롤/미디어 이벤트에서 LMS 호출이 과도해지지 않는다.
+    if (isQueue) return;
+    if (queues.length === 0) {
+      isQueue = false;
+      return;
+    }
+    isQueue = true;
+    var item = queues[0];
+    queues.splice(0, 1);
+
+    writeScormProgressItem(item, false);
 
     setTimeout(function () {
       isQueue = false;
       runQueue();
     }, 300);
   }
+
+  function flushScormProgressNow() {
+    var now = Date.now();
+    // Windows Chrome에서는 visibilitychange/pagehide/beforeunload가 짧은 간격으로 이어질 수 있다.
+    // 새 objective queue나 suspend_data 변경이 없을 때만 중복 flush를 생략한다.
+    if (
+      now - _lastScormFlushAt < 500 &&
+      queues.length === 0 &&
+      !_hasPendingSuspendData
+    ) {
+      return;
+    }
+    _lastScormFlushAt = now;
+
+    // 종료 직전에는 디바운스 타이머를 기다릴 수 없으므로 상세 상태를 즉시 저장한다.
+    clearTimeout(_suspendDataTimer);
+    _saveSuspendDataNow();
+
+    // 아직 일반 저장 큐에 남은 페이지 진도를 먼저 모두 반영한다.
+    while (queues.length > 0) {
+      writeScormProgressItem(queues.shift(), true);
+    }
+
+    // 큐에서 이미 빠졌지만 LMS 반영이 누락됐을 가능성까지 줄이기 위해
+    // 현재 내부 진도 기준으로 전체 objective와 전체 진도를 한 번 더 맞춘다.
+    resyncAllScormProgress(true);
+    isQueue = false;
+  }
+
+  // 재진입 시 suspend_data에서 복원한 내부 진도를 LMS objective에 다시 반영한다.
+  // 이전 세션 종료 과정에서 일부 objective SetValue가 누락된 경우 다음 진입에서 복구된다.
+  resyncAllScormProgress(false);
+
+  window.addEventListener("pagehide", flushScormProgressNow);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") {
+      flushScormProgressNow();
+    }
+  });
 
   // 반응형 iframe 높이 조정
   function onResize() {
