@@ -55,6 +55,16 @@ var watermarkRefreshTimer = null;
 
 const NOT_ALLOWED_NEXT_MSG = "현재 페이지 학습 완료 후 다음 학습이 가능합니다.";
 
+function normalizeScormProgressRate(value) {
+  var rate = Number(value);
+  if (!Number.isFinite(rate)) return 0;
+  rate = Math.min(Math.max(rate, 0), 1);
+  // LMS는 0~1 값을 100으로 곱해 표시하므로, 정수 퍼센트가 되도록 소수점 2자리까지만 보낸다.
+  // 반올림하지 않고 버림 처리한다. 예: 0.666 -> 66%
+  var floored = Math.floor(rate * 100) / 100;
+  return rate < 1 ? Math.min(floored, 0.99) : 1;
+}
+
 function getCurrentTimeString() {
   var date = new Date();
   return (
@@ -1282,8 +1292,7 @@ function page_initialize() {
     totalProcessSum = rate;
 
     // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
-    // 소수점 1자리(10% 단위)로 반올림해 전송한다.
-    let finalRate = max > 0 ? rate / max : 0;
+    let finalRate = normalizeScormProgressRate(max > 0 ? rate / max : 0);
     ScormSet("cmi.progress_measure", finalRate);
   } catch (e) {
     console.error(e);
@@ -1533,7 +1542,10 @@ function page_initialize() {
     queues.splice(0, 1);
 
     // 페이지별 objective 진행률을 먼저 반영한다.
-    ScormSet("cmi.objectives." + item.id + ".progress_measure", item.value);
+    ScormSet(
+      "cmi.objectives." + item.id + ".progress_measure",
+      normalizeScormProgressRate(item.value),
+    );
 
     // process 배열에서 매번 직접 합산해 부동소수점 누적 오차를 방지한다.
     let max = pageIds.length;
@@ -1543,8 +1555,7 @@ function page_initialize() {
     }
     totalProcessSum = rateSum;
     // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
-    // 소수점 1자리(10% 단위)로 반올림해 전송한다.
-    let finalRate = max > 0 ? rateSum / max : 0;
+    let finalRate = normalizeScormProgressRate(max > 0 ? rateSum / max : 0);
     var completionStatus = finalRate >= 1 ? "completed" : "incomplete";
 
     // 최종 진도와 완료 상태는 값이 실제로 바뀐 경우에만 저장한다.
