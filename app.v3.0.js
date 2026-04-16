@@ -130,16 +130,16 @@ function buildStarbucksWatermarkHtml(text) {
     viewportWidth * viewportWidth + viewportHeight * viewportHeight,
   );
   var gridSize = Math.ceil(diagonal * 2.8);
-  var columns = Math.max(12, Math.ceil(gridSize / cellWidth));
-  var rows = Math.max(16, Math.ceil(gridSize / cellHeight));
+  var columns = Math.max(15, Math.ceil(gridSize / cellWidth));
+  var rows = Math.max(20, Math.ceil(gridSize / cellHeight));
   var html = "";
 
   for (var row = 0; row < rows; row++) {
-    html += '<div class="sb-watermark-row">';
+    html += "<div>";
     for (var column = 0; column < columns; column++) {
       html +=
         '<span class="sb-watermark-cell' +
-        (row % 2 === 1 ? " is-offset" : "") +
+        // (row % 2 === 1 ? " is-offset" : "") +
         '">' +
         text +
         "</span>";
@@ -812,7 +812,8 @@ $(window).on("message onmessage", function (e) {
       var mid = $("iframe[data-extra='" + raw.extra + "']")
         .parents("[data-mod-id]")
         .attr("data-mod-id");
-      if (raw.count > 0) {
+      // mid를 찾지 못한 경우 setModuleExtra에 undefined가 전달되지 않도록 차단한다.
+      if (mid && raw.count > 0) {
         var process = Math.min(1, (raw.active + 1) / raw.count);
         window.setModuleExtra(mid, { process });
       }
@@ -1159,69 +1160,6 @@ function page_initialize() {
     };
   }
 
-  // 자동완료는 현재 활성 페이지와 실제로 관련된 스크롤에서만 수행한다.
-  // 목차, 외부 컨테이너, 초기 레이아웃 흔들림으로 들어오는 scroll 이벤트는 제외한다.
-  function isScrollFromActivePageContext(e) {
-    if (!e || e.type !== "scroll") return false;
-
-    var activePage = $("[data-page-id].active").first().get(0);
-    if (!activePage) return false;
-
-    var target = e.target;
-    var pageScrollTarget = getPageMoreScrollTarget();
-    var docTarget = document.scrollingElement || document.documentElement;
-
-    if (target === activePage || (activePage.contains && activePage.contains(target))) {
-      return true;
-    }
-    if (pageScrollTarget && target === pageScrollTarget) return true;
-    if (
-      pageScrollTarget &&
-      pageScrollTarget !== docTarget &&
-      pageScrollTarget.contains &&
-      pageScrollTarget.contains(target)
-    ) {
-      return true;
-    }
-    if (
-      (target === document || target === document.documentElement || target === docTarget) &&
-      (pageScrollTarget === docTarget || pageScrollTarget === activePage)
-    ) {
-      return true;
-    }
-
-    return false;
-  }
-
-  // passive 모듈이 실제로 충분히 보이는 경우에만 자동완료한다.
-  // 진입 직후 이미지 높이가 아직 덜 잡힌 상태에서는 완료 처리하지 않는다.
-  function isPassiveModuleReadyToComplete(el, viewportBounds) {
-    if (!el || !viewportBounds) return false;
-
-    var rect = el.getBoundingClientRect();
-    var height = Math.max(rect.height || 0, rect.bottom - rect.top);
-    if (height < 24) return false;
-
-    var visibleTop = Math.max(rect.top, viewportBounds.top);
-    var visibleBottom = Math.min(rect.bottom, viewportBounds.bottom);
-    var visibleHeight = Math.max(0, visibleBottom - visibleTop);
-    if (visibleHeight < 24) return false;
-
-    var viewportHeight = Math.max(0, viewportBounds.bottom - viewportBounds.top);
-    if (viewportHeight <= 0) return false;
-
-    var visibilityRatio = visibleHeight / Math.max(height, 1);
-    var moduleCenter = rect.top + height / 2;
-    var centerInViewport =
-      moduleCenter >= viewportBounds.top && moduleCenter <= viewportBounds.bottom;
-
-    if (height <= viewportHeight * 0.9) {
-      return visibilityRatio >= 0.6;
-    }
-
-    return centerInViewport && visibleHeight >= Math.min(240, viewportHeight * 0.5);
-  }
-
   // 활성 페이지의 load/DOM 변화를 감시해 more 버튼과 근접 자동완료를 다시 계산한다.
   function observeActivePageMoreChanges(pageEl) {
     if (pageMoreObserver) {
@@ -1272,7 +1210,9 @@ function page_initialize() {
 
     var mid = $(this).parents("[data-mod-id]").attr("data-mod-id");
     window["fn_" + uuid] = function (progress) {
-      window.setModuleExtra(mid, { process: Math.min(progress / 100.0, 1) });
+      // 음수나 비정상 값이 들어오면 0으로 클램핑해 process가 음수가 되지 않도록 방어한다.
+      var clamped = Math.min(Math.max(progress / 100.0, 0), 1);
+      window.setModuleExtra(mid, { process: clamped });
     };
     html_intfs[uuid] = window["fn_" + uuid];
 
@@ -1329,18 +1269,21 @@ function page_initialize() {
         sum += moduleData.process || 0;
       }
 
-      process[i] = sum / moduleIds[i].length;
+      // 모듈이 없는 페이지에서 나누기 0으로 Infinity가 되는 것을 방어한다.
+      process[i] = moduleIds[i].length > 0 ? sum / moduleIds[i].length : 0;
     }
 
     // 전체 페이지 평균을 현재 학습 진도로 사용한다.
-    let max = menus.length;
+    let max = pageIds.length;
     let rate = 0;
     for (let i = 0; i < max; i++) {
       rate += process[i] || 0;
     }
     totalProcessSum = rate;
 
-    let finalRate = rate / (max + 0.0);
+    // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
+    // 소수점 1자리(10% 단위)로 반올림해 전송한다.
+    let finalRate = max > 0 ? rate / max : 0;
     ScormSet("cmi.progress_measure", finalRate);
   } catch (e) {
     console.error(e);
@@ -1442,7 +1385,9 @@ function page_initialize() {
       sum += moduleData.process || 0;
     }
 
-    var realProcess = sum / moduleIds[pageIx].length;
+    // 모듈이 없는 페이지(length === 0)에서 나누기 0으로 Infinity가 되는 것을 방어한다.
+    var realProcess =
+      moduleIds[pageIx].length > 0 ? sum / moduleIds[pageIx].length : 0;
     setProcess(pageIx, realProcess);
   }
 
@@ -1485,6 +1430,9 @@ function page_initialize() {
   // 페이지 단위 진도를 갱신하고 SCORM 반영 큐를 실행한다.
   // 페이지 단위 진도를 반영하고, SCORM 저장 큐와 목차 UI를 함께 갱신한다.
   function setProcess(id, value) {
+    // NaN·Infinity가 totalProcessSum에 섞이면 이후 모든 진도 계산이 망가지므로
+    // 유효하지 않은 값은 진입 시점에 바로 차단한다.
+    if (!Number.isFinite(value)) return;
     if (value !== 1 && process[id] === value) return;
     var prevValue = process[id] || 0;
     process[id] = value;
@@ -1587,8 +1535,16 @@ function page_initialize() {
     // 페이지별 objective 진행률을 먼저 반영한다.
     ScormSet("cmi.objectives." + item.id + ".progress_measure", item.value);
 
-    var max = menus.length;
-    var finalRate = totalProcessSum / (max + 0.0);
+    // process 배열에서 매번 직접 합산해 부동소수점 누적 오차를 방지한다.
+    let max = pageIds.length;
+    var rateSum = 0;
+    for (var pi = 0; pi < max; pi++) {
+      rateSum += process[pi] || 0;
+    }
+    totalProcessSum = rateSum;
+    // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
+    // 소수점 1자리(10% 단위)로 반올림해 전송한다.
+    let finalRate = max > 0 ? rateSum / max : 0;
     var completionStatus = finalRate >= 1 ? "completed" : "incomplete";
 
     // 최종 진도와 완료 상태는 값이 실제로 바뀐 경우에만 저장한다.
@@ -2138,7 +2094,15 @@ function page_initialize() {
     var viewportBounds = getActivePageViewportBounds();
     var passiveModules = pagePassiveModuleElementsMap[pageIndex] || [];
     passiveModules.forEach(function (el) {
-      if (isPassiveModuleReadyToComplete(el, viewportBounds)) {
+      var p = el.getBoundingClientRect();
+      // 모듈 하단이 뷰포트 안에 들어왔을 때 완료 처리한다.
+      // p.height > 0: 이미지가 아직 로드되지 않아 높이가 0인 상태에서
+      // 오완료되는 것을 막기 위한 가드이다.
+      if (
+        p.bottom <= viewportBounds.bottom + 20 &&
+        p.top < viewportBounds.bottom &&
+        p.height > 0
+      ) {
         var mid = $(el).attr("data-mod-id");
         if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
       }
@@ -2161,6 +2125,12 @@ function page_initialize() {
     // 단일 이미지처럼 "거의 다 보이는 정적 페이지"만 예외 처리한다.
     // 페이지 전체 기준으로 이미지가 여러 장이면 실제 스크롤을 요구한다.
     if (activePage.find("img").length > 1) return false;
+
+    // 아직 로드되지 않은 이미지(data-src 대기 중)가 있으면 레이아웃이 확정되지 않은
+    // 상태이므로 near-fit 자동완료를 허용하지 않는다.
+    // 이미지 src 복원 시 MutationObserver가 발동해 진입 직후 progress=1로 찍히는
+    // 오탐을 모든 호출 경로에서 차단하기 위한 보수적 가드이다.
+    if (activePage.find("img[data-src]").length > 0) return false;
 
     return true;
   }
@@ -2186,7 +2156,7 @@ function page_initialize() {
   // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
   // 사용자 스크롤 시 비상호작용 모듈 자동완료와 more 버튼 갱신을 함께 처리한다.
   function onScroll(e) {
-    if (isScrollFromActivePageContext(e)) {
+    if (e && e.type === "scroll") {
       completeVisiblePassiveModules();
     }
     if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
@@ -2222,7 +2192,14 @@ function page_initialize() {
       var mid = $(target).parents("[data-mod-id]").attr("data-mod-id");
       var nCurr = moduleExtra[mid] ? moduleExtra[mid].currentTime || 0 : 0;
       var currentTime = Math.max(target.currentTime, nCurr);
-      var process = currentTime / target.duration;
+      // duration이 NaN(메타데이터 미로드)이거나 0이면 나누기 결과가 NaN·Infinity가 된다.
+      // 유효하지 않은 duration일 때는 process 갱신을 건너뛰고 currentTime만 보존한다.
+      var duration = target.duration;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        setModuleExtra(mid, { currentTime: currentTime });
+        continue;
+      }
+      var process = currentTime / duration;
       setModuleExtra(mid, { process, currentTime: currentTime });
     }
   }, 20000);

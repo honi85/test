@@ -1482,7 +1482,7 @@ body {
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 55px;
+  gap: 32px;
   transform: translate(-50%, -50%) rotate(-45deg);
   transform-origin: center;
   opacity: 0.1;
