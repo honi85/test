@@ -2135,14 +2135,39 @@ function page_initialize() {
     return true;
   }
 
-  // 스크롤이 거의 필요 없는 페이지(overflow 20px 미만)는 진입 시 바로 자동 완료한다.
-  // 사용자가 체감상 "다 본 페이지"인데 1~19px 차이로 progress가 안 오르는 문제를 막기 위한 예외 규칙이다.
+  // 이미지 passive 모듈이 포함된 보이는 페이지는 스크롤 이벤트가 없어도 완료 처리한다.
+  // 이미지가 아직 data-src 상태이면 레이아웃이 확정되지 않았으므로 load/MutationObserver 재평가를 기다린다.
+  function canAutoCompleteNoScrollImagePage(target) {
+    var activePage = $(".page-item.active");
+    if (!activePage.length) return false;
+    if (activePage.find("img[data-src]").length > 0) return false;
+    if (hasActivePageMoreBelow(activePage.get(0), target)) return false;
+
+    var hasImagePassiveModule = false;
+    activePage.find("[data-mod-id]").each(function (_, el) {
+      var mid = $(el).attr("data-mod-id");
+      if (!mid || !moduleExtra[mid] || moduleExtra[mid].act) return;
+      if ($(el).find("img").length > 0) {
+        hasImagePassiveModule = true;
+        return false;
+      }
+    });
+
+    return hasImagePassiveModule;
+  }
+
+  // 스크롤이 없거나 거의 필요 없는 이미지 페이지는 진입 시 바로 자동 완료한다.
+  // 사용자가 체감상 "다 본 페이지"인데 1~29px 차이로 progress가 안 오르는 문제도 함께 막는다.
   function autoCompleteNearFitModules() {
     if (isIOSDevice && isIOSVideoFullscreen) return;
     var target = getPageMoreScrollTarget();
     var overflow = target
       ? getScrollHeight(target) - getClientHeight(target)
       : 0;
+    if (canAutoCompleteNoScrollImagePage(target)) {
+      completeVisiblePassiveModules();
+      return;
+    }
     if (
       canAutoCompleteNearFitPage() &&
       target &&
