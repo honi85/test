@@ -842,33 +842,7 @@ function page_initialize() {
   var pageMoreObservedPage = null;
   var pageMoreObservedLoadHandler = null;
 
-  // ===== More Indicator / Scroll Target =====
-  // 하단 more 버튼을 한 번만 생성하고 재사용한다.
-  function ensurePageMoreIndicator() {
-    if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
-
-    pageMoreIndicator = $(
-      '<button id="page_more_indicator" type="button" aria-label="아래 학습 내용 더 보기">' +
-        '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
-        '<path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>' +
-        "</svg>" +
-        "</button>",
-    );
-
-    pageMoreIndicator.on("click", function () {
-      var target = getPageMoreScrollTarget();
-      if (!target) return;
-
-      var currentTop = getScrollTop(target);
-      var viewportHeight = getClientHeight(target);
-      var nextTop = currentTop + Math.max(viewportHeight * 0.7, 240);
-      scrollToTop(target, nextTop);
-    });
-
-    $("body").append(pageMoreIndicator);
-    return pageMoreIndicator;
-  }
-
+  // ===== Scroll Target / Viewport Utilities =====
   // 실제로 스크롤 이동이 필요한 요소인지 판별한다.
   function isScrollableElement(el) {
     if (!el) return false;
@@ -982,28 +956,6 @@ function page_initialize() {
     return target.clientHeight || window.innerHeight;
   }
 
-  function setAutoplayProgressVisible(visible) {
-    $(".autoplay-progress").toggleClass("is-visible", !!visible);
-  }
-
-  function shouldShowAutoplayProgress() {
-    if (!isSwipe || !swiper || !(autoPlay > 0)) return false;
-    if (!swiper.autoplay || !swiper.autoplay.running || swiper.isEnd)
-      return false;
-
-    var activeIndex =
-      typeof swiper.realIndex === "number"
-        ? swiper.realIndex
-        : swiper.activeIndex;
-    if (typeof activeIndex !== "number" || activeIndex < 0) return false;
-
-    return process[activeIndex] === 1;
-  }
-
-  function updateAutoplayProgressVisibility() {
-    setAutoplayProgressVisible(shouldShowAutoplayProgress());
-  }
-
   // 현재 스크롤 대상의 전체 콘텐츠 높이를 반환한다.
   function getScrollHeight(target) {
     if (!target) return 0;
@@ -1046,49 +998,31 @@ function page_initialize() {
     }
   }
 
-  function scrollQuizResultIntoView(parent) {
-    if (!parent || parent.length === 0) return;
+  // ===== More Indicator =====
+  // 하단 more 버튼을 한 번만 생성하고 재사용한다.
+  function ensurePageMoreIndicator() {
+    if (pageMoreIndicator && pageMoreIndicator.length) return pageMoreIndicator;
 
-    var resultEl =
-      parent.children(".result").get(0) ||
-      parent.find(".result").first().get(0);
-    if (!resultEl) return;
+    pageMoreIndicator = $(
+      '<button id="page_more_indicator" type="button" aria-label="아래 학습 내용 더 보기">' +
+        '<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">' +
+        '<path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path>' +
+        "</svg>" +
+        "</button>",
+    );
 
-    setTimeout(function () {
-      if (typeof resultEl.scrollIntoView === "function") {
-        resultEl.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-          inline: "nearest",
-        });
-      }
+    pageMoreIndicator.on("click", function () {
+      var target = getPageMoreScrollTarget();
+      if (!target) return;
 
-      requestAnimationFrame(function () {
-        var target = getPageMoreScrollTarget();
-        var margin = 20;
-        var nextTop = 0;
-        var resultRect = resultEl.getBoundingClientRect();
+      var currentTop = getScrollTop(target);
+      var viewportHeight = getClientHeight(target);
+      var nextTop = currentTop + Math.max(viewportHeight * 0.7, 240);
+      scrollToTop(target, nextTop);
+    });
 
-        if (
-          !target ||
-          target === window ||
-          target === document ||
-          target === document.body ||
-          target === document.documentElement ||
-          target === document.scrollingElement
-        ) {
-          nextTop =
-            getScrollTop(document.scrollingElement) + resultRect.top - margin;
-          scrollToTop(document.scrollingElement, Math.max(0, nextTop));
-          return;
-        }
-
-        var targetRect = target.getBoundingClientRect();
-        nextTop =
-          getScrollTop(target) + (resultRect.top - targetRect.top) - margin;
-        scrollToTop(target, Math.max(0, nextTop));
-      });
-    }, 40);
+    $("body").append(pageMoreIndicator);
+    return pageMoreIndicator;
   }
 
   // more 버튼 노출 여부를 현재 활성 페이지 상태에 맞춰 갱신한다.
@@ -1160,6 +1094,91 @@ function page_initialize() {
     };
   }
 
+  // ===== Passive Module Auto-complete =====
+  // 2.1의 정적 콘텐츠 진도 정책을 유지하는 핵심 경로다.
+  //
+  // passive 모듈(act=false)은 별도 완료 이벤트가 없으므로, 사용자가 해당 모듈의
+  // 하단까지 실제로 볼 수 있는 상태가 되면 완료로 인정한다. 이 함수는 실제 scroll
+  // 이벤트뿐 아니라 페이지 진입, 이미지 load, DOM 변경 후에도 호출되어야 한다.
+  // 그래야 스크롤이 없는 짧은 페이지나 lazy-load 이미지 페이지에서도 누락이 없다.
+  function completeVisiblePassiveModules() {
+    var viewportBounds = getActivePageViewportBounds();
+    var passiveModules = pagePassiveModuleElementsMap[pageIndex] || [];
+    passiveModules.forEach(function (el) {
+      var p = el.getBoundingClientRect();
+      // 모듈 하단이 뷰포트 안에 들어왔을 때 완료 처리한다.
+      // p.height > 0은 lazy-load 이미지가 아직 레이아웃을 만들기 전에
+      // 오완료되는 것을 막는다. 로드가 끝나면 _loadPageImage의 load handler와
+      // MutationObserver가 이 함수를 다시 호출한다.
+      if (
+        p.bottom <= viewportBounds.bottom + 20 &&
+        p.top < viewportBounds.bottom &&
+        p.height > 0
+      ) {
+        var mid = $(el).attr("data-mod-id");
+        if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
+      }
+    });
+  }
+
+  // near-fit 자동완료는 단일 passive 모듈 페이지에서만 허용한다.
+  // 여러 이미지 모듈이 한 페이지에 있을 때 진입 직후 전체 완료로 찍히는 오탐을
+  // 막기 위한 제한이다. 복수 모듈 페이지는 completeVisiblePassiveModules가 각
+  // 모듈의 실제 노출 여부를 따로 판단한다.
+  function canAutoCompleteNearFitPage() {
+    var activePage = $(".page-item.active");
+    if (!activePage.length) return false;
+
+    var moduleBlocks = activePage.find("[data-mod-id]");
+    if (moduleBlocks.length !== 1) return false;
+
+    var moduleEl = moduleBlocks.first();
+    var mid = moduleEl.attr("data-mod-id");
+    if (!mid || !moduleExtra[mid] || moduleExtra[mid].act) return false;
+
+    // 단일 이미지처럼 "거의 다 보이는 정적 페이지"만 예외 처리한다.
+    // 페이지 전체 기준으로 이미지가 여러 장이면 실제 스크롤을 요구한다.
+    if (activePage.find("img").length > 1) return false;
+
+    // 아직 로드되지 않은 이미지(data-src 대기 중)가 있으면 레이아웃이 확정되지 않은
+    // 상태이므로 near-fit 자동완료를 허용하지 않는다.
+    // 이미지 src 복원 시 MutationObserver가 발동해 진입 직후 progress=1로 찍히는
+    // 오탐을 모든 호출 경로에서 차단하기 위한 보수적 가드이다.
+    if (activePage.find("img[data-src]").length > 0) return false;
+
+    return true;
+  }
+
+  // 스크롤이 없거나 거의 필요 없는 페이지는 진입 시 바로 자동 완료한다.
+  // 2.1은 페이지 진입 때 onScroll을 직접 호출했기 때문에 짧은 정적 페이지가 바로
+  // 완료됐다. 3.0에서도 같은 체감을 유지하되, 단일 passive 모듈에만 적용해
+  // 긴 복수 이미지 페이지가 한 번에 완료되는 오탐은 막는다.
+  function autoCompleteNearFitModules() {
+    if (isIOSDevice && isIOSVideoFullscreen) return;
+    var target = getPageMoreScrollTarget();
+    var overflow = target
+      ? getScrollHeight(target) - getClientHeight(target)
+      : 0;
+    if (
+      canAutoCompleteNearFitPage() &&
+      (!target || (overflow >= 0 && overflow < 30))
+    ) {
+      completeVisiblePassiveModules();
+    }
+  }
+
+  // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
+  // e.type === "scroll" 조건을 두면 setPageIndex에서 직접 호출한 onScroll이
+  // 완료 검사를 건너뛰어 2.1 대비 진도 누락이 생긴다. 그래서 synthetic 호출과
+  // 실제 스크롤 호출 모두 동일하게 처리한다.
+  function onScroll(e) {
+    completeVisiblePassiveModules();
+    if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
+      window.refreshActivePageImages(false);
+    }
+    schedulePageMoreIndicatorUpdate();
+  }
+
   // 활성 페이지의 load/DOM 변화를 감시해 more 버튼과 근접 자동완료를 다시 계산한다.
   function observeActivePageMoreChanges(pageEl) {
     if (pageMoreObserver) {
@@ -1180,6 +1199,7 @@ function page_initialize() {
     pageMoreObservedPage = pageEl;
     pageMoreObservedLoadHandler = function () {
       if (isIOSDevice && isIOSVideoFullscreen) return;
+      completeVisiblePassiveModules();
       autoCompleteNearFitModules();
       schedulePageMoreIndicatorUpdate();
     };
@@ -1190,6 +1210,7 @@ function page_initialize() {
     );
     pageMoreObserver = new MutationObserver(function () {
       if (isIOSDevice && isIOSVideoFullscreen) return;
+      completeVisiblePassiveModules();
       autoCompleteNearFitModules();
       schedulePageMoreIndicatorUpdate();
     });
@@ -1227,6 +1248,16 @@ function page_initialize() {
   }
 
   // 페이지별 모듈 목록과 모듈의 초기 상태를 수집한다.
+  //
+  // 진도 정책의 기본 단위는 "모듈 -> 페이지 -> 전체" 순서다.
+  // - 모듈 process: 개별 콘텐츠의 완료율. 0~1 사이 값만 의미가 있다.
+  // - 페이지 process: 해당 페이지 안에 있는 모듈 process의 평균.
+  // - 전체 progress_measure: 2.1과 동일하게 목차에 노출되는 페이지 평균.
+  //
+  // act=true 모듈은 사용자가 직접 완료 신호를 만들어야 한다.
+  // 예: video/audio ended, quiz 제출, 내부 slide 이동, iframe progress message.
+  // act=false 모듈은 정적 이미지/텍스트처럼 별도 상호작용이 없으므로,
+  // 화면에 실제로 보인 시점에 자동으로 process=1 처리한다.
   $("#screen_body [data-page-id]").each(function (i, v) {
     var mods = [];
     var pageId = $(v).attr("data-page-id");
@@ -1273,8 +1304,10 @@ function page_initialize() {
       process[i] = moduleIds[i].length > 0 ? sum / moduleIds[i].length : 0;
     }
 
-    // 전체 페이지 평균을 현재 학습 진도로 사용한다.
-    let max = pageIds.length;
+    // 2.1과 동일하게 목차에 노출되는 페이지 수를 전체 진도 분모로 사용한다.
+    // pageIds.length로 계산하면 숨김/비목차 페이지가 있는 과정에서 100%에 도달하지
+    // 못할 수 있으므로, 전체 completed 판정도 같은 분모를 따라야 한다.
+    let max = menuElements.length || pageIds.length;
     let rate = 0;
     for (let i = 0; i < max; i++) {
       rate += process[i] || 0;
@@ -1285,6 +1318,10 @@ function page_initialize() {
     // 소수점 1자리(10% 단위)로 반올림해 전송한다.
     let finalRate = max > 0 ? rate / max : 0;
     ScormSet("cmi.progress_measure", finalRate);
+    ScormSet(
+      "cmi.completion_status",
+      finalRate >= 1 ? "completed" : "incomplete",
+    );
   } catch (e) {
     console.error(e);
   }
@@ -1297,7 +1334,10 @@ function page_initialize() {
       $(this).removeClass("nav-on");
     });
 
-  // suspend_data 저장은 디바운스 처리하고, 페이지 종료 직전에는 즉시 한 번 더 저장한다.
+  // suspend_data 저장은 기본적으로 디바운스 처리한다.
+  // 단, 모듈이 완료되는 순간(process가 1로 올라가는 순간)은 아래 setModuleExtra에서
+  // 즉시 저장한다. 모바일 웹뷰/부모 프레임 이동에서는 beforeunload가 누락될 수 있어
+  // 완료 기록만큼은 지연 저장에만 의존하지 않는다.
   var _suspendDataTimer = null;
   function _saveSuspendDataNow() {
     ScormSet("cmi.suspend_data", JSON.stringify(moduleExtra));
@@ -1312,7 +1352,14 @@ function page_initialize() {
   });
 
   // ===== Module Progress / Completion / Sequential Navigation =====
-  // process는 감소시키지 않고 최대값만 유지해 되감기나 재생 위치 변경으로 진도가 후퇴하지 않게 한다.
+  // 모든 콘텐츠 타입은 최종적으로 이 함수로 진도를 반영한다.
+  //
+  // 유지보수 시 지켜야 할 규칙:
+  // 1. process는 0~1 사이로 클램프한다.
+  // 2. process는 감소시키지 않는다. 영상 되감기, 슬라이드 되돌아가기, 재진입으로
+  //    이미 얻은 진도가 후퇴하면 LMS 완료 판정이 흔들린다.
+  // 3. process=1 전환은 즉시 suspend_data에 저장한다.
+  // 4. process 외 값(currentTime, quiz vals/state 등)은 값이 바뀔 때만 저장한다.
   function setModuleExtra(mid, val) {
     var currentPageModules = pageModuleMap[pageIndex] || [];
     const lastModuleId =
@@ -1321,10 +1368,17 @@ function page_initialize() {
         : undefined;
 
     var currentModuleExtra = moduleExtra[mid];
+    var prevProcess = currentModuleExtra?.process || 0;
+    // 외부 HTML/미디어 duration 오류 등에서 NaN, Infinity, 음수 값이 들어오면
+    // 페이지 평균과 전체 progress_measure가 모두 깨지므로 진입점에서 방어한다.
+    var requestedProcess =
+      typeof val?.process === "number" && Number.isFinite(val.process)
+        ? Math.min(Math.max(val.process, 0), 1)
+        : undefined;
     var nextProcess =
-      typeof val?.process === "number"
-        ? Math.max(currentModuleExtra?.process || 0, val.process)
-        : currentModuleExtra?.process || 0;
+      typeof requestedProcess === "number"
+        ? Math.max(prevProcess, requestedProcess)
+        : prevProcess;
     var hasMeaningfulDelta =
       !currentModuleExtra ||
       Object.keys(val || {}).some(function (key) {
@@ -1338,6 +1392,9 @@ function page_initialize() {
       return;
     }
 
+    // 2.1에 있던 중복 저장 방지 정책을 유지한다.
+    // process만 같은 값으로 반복 들어온 경우는 무시하되, currentTime/quiz 값처럼
+    // process 외 데이터가 바뀐 경우에는 저장해야 복원 상태가 유지된다.
     if (lastModuleId != mid && currentModuleExtra?.process === nextProcess) {
       var nonProcessKeys = Object.keys(val || {}).filter(function (key) {
         return key !== "process";
@@ -1363,8 +1420,13 @@ function page_initialize() {
     if (!moduleExtra[mid]) {
       return;
     }
-    // 저장은 즉시 연속 호출하지 않고 잠시 모아서 처리한다.
-    _saveSuspendDataDebounced();
+    // 완료 순간에는 빠른 페이지 이동/웹뷰 종료에서도 누락되지 않도록 즉시 저장한다.
+    if (prevProcess < 1 && nextProcess === 1) {
+      clearTimeout(_suspendDataTimer);
+      _saveSuspendDataNow();
+    } else {
+      _saveSuspendDataDebounced();
+    }
     renderModuleExtra(mid);
     if (window.swiper)
       window.swiper.allowSlideNext = !isParentFunc("next") && isNextAllow();
@@ -1372,8 +1434,6 @@ function page_initialize() {
 
   window.setModuleExtra = setModuleExtra;
 
-  // 특정 모듈이 속한 페이지의 평균 진도를 다시 계산한다.
-  // 특정 모듈이 속한 페이지의 평균 진도를 다시 계산한다.
   // 페이지 단위 진도/목차 표시/순차학습 잠금은 모두 이 계산 결과를 기준으로 움직인다.
   function renderModuleExtra(mid) {
     var pageIx = modulePageIndexMap[mid];
@@ -1391,9 +1451,9 @@ function page_initialize() {
     setProcess(pageIx, realProcess);
   }
 
-  // 순차 학습 과정에서는 현재 페이지의 모든 모듈이 완료되어야 다음으로 이동할 수 있다.
-  // 페이지 내 모든 모듈의 process가 1인지 확인한다.
-  // 목차 완료 아이콘과 순차학습 next 허용 여부는 이 함수 기준으로 맞춘다.
+  // 페이지 완료의 단일 기준이다.
+  // 목차 완료 아이콘, 순차학습 next 허용 여부, 자동 넘김은 모두 이 함수와
+  // 페이지 평균 process가 같은 의미를 갖도록 유지해야 한다.
   function isPageComplete(pageId) {
     var modules = pageModuleMap[pageId] || [];
     for (var i = 0; i < modules.length; i++) {
@@ -1427,8 +1487,8 @@ function page_initialize() {
     return true;
   }
 
-  // 페이지 단위 진도를 갱신하고 SCORM 반영 큐를 실행한다.
   // 페이지 단위 진도를 반영하고, SCORM 저장 큐와 목차 UI를 함께 갱신한다.
+  // value는 renderModuleExtra에서 계산한 "페이지 내 모듈 평균"이다.
   function setProcess(id, value) {
     // NaN·Infinity가 totalProcessSum에 섞이면 이후 모든 진도 계산이 망가지므로
     // 유효하지 않은 값은 진입 시점에 바로 차단한다.
@@ -1515,7 +1575,7 @@ function page_initialize() {
     }
   }
 
-  // ===== Page Lifecycle / Asset Binding =====
+  // ===== SCORM Queue / Initial UI Sync =====
   reloadProcess();
 
   // SCORM 값은 이전 기록과 비교해 바뀐 경우에만 다시 저장한다.
@@ -1536,7 +1596,9 @@ function page_initialize() {
     ScormSet("cmi.objectives." + item.id + ".progress_measure", item.value);
 
     // process 배열에서 매번 직접 합산해 부동소수점 누적 오차를 방지한다.
-    let max = pageIds.length;
+    // 2.1과 동일하게 목차에 노출되는 페이지 수를 전체 진도 분모로 사용한다.
+    // 이 분모가 초기 progress_measure 계산과 달라지면 completed 판정이 흔들린다.
+    let max = menuElements.length || pageIds.length;
     var rateSum = 0;
     for (var pi = 0; pi < max; pi++) {
       rateSum += process[pi] || 0;
@@ -1580,6 +1642,7 @@ function page_initialize() {
   $(window).on("resize", schedulePageMoreIndicatorUpdate);
   ensurePageMoreIndicator();
 
+  // ===== Page Lifecycle / Asset Binding =====
   var _loc = ScormGet("cmi.location") || "0_0";
   var pageIndex = _loc || pageIdItems.attr("data-page-id");
   $("[data-page-id='" + pageIndex + "']").addClass("active");
@@ -1675,6 +1738,18 @@ function page_initialize() {
   function _loadPageImage(img) {
     if (!img || !img.getAttribute("data-src")) return;
     var $img = $(img);
+    // 3.0은 메모리 절약을 위해 이미지를 현재 페이지에서만 복원한다.
+    // 이미지 로드 전에는 모듈 높이가 0일 수 있어서 passive 완료가 보류되므로,
+    // load 직후 2.1의 페이지 진입/스크롤 완료 정책을 다시 한 번 실행한다.
+    img.addEventListener(
+      "load",
+      function () {
+        completeVisiblePassiveModules();
+        autoCompleteNearFitModules();
+        schedulePageMoreIndicatorUpdate();
+      },
+      { once: true },
+    );
     $img.attr("src", $img.attr("data-src")).removeAttr("data-src");
     _resizeImageIfOversized(img);
   }
@@ -1878,6 +1953,29 @@ function page_initialize() {
       forceReset ? 260 : 80,
     );
   };
+
+  // ===== Swiper Page Navigation / Autoplay =====
+  function setAutoplayProgressVisible(visible) {
+    $(".autoplay-progress").toggleClass("is-visible", !!visible);
+  }
+
+  function shouldShowAutoplayProgress() {
+    if (!isSwipe || !swiper || !(autoPlay > 0)) return false;
+    if (!swiper.autoplay || !swiper.autoplay.running || swiper.isEnd)
+      return false;
+
+    var activeIndex =
+      typeof swiper.realIndex === "number"
+        ? swiper.realIndex
+        : swiper.activeIndex;
+    if (typeof activeIndex !== "number" || activeIndex < 0) return false;
+
+    return process[activeIndex] === 1;
+  }
+
+  function updateAutoplayProgressVisibility() {
+    setAutoplayProgressVisible(shouldShowAutoplayProgress());
+  }
 
   // 화면이 Swiper 모드면 슬라이드 이동과 페이지 진도를 연동한다.
   if ($("#screen_body.SWIPE").length) {
@@ -2087,84 +2185,7 @@ function page_initialize() {
     }
   });
 
-  // ===== Passive Module Auto-complete =====
-  // 화면 안에 실제로 들어온 비상호작용 모듈만 자동 완료 처리한다.
-  // act=false 모듈만 대상으로 하며, 보이는 영역 계산은 활성 페이지의 실제 viewport를 기준으로 한다.
-  function completeVisiblePassiveModules() {
-    var viewportBounds = getActivePageViewportBounds();
-    var passiveModules = pagePassiveModuleElementsMap[pageIndex] || [];
-    passiveModules.forEach(function (el) {
-      var p = el.getBoundingClientRect();
-      // 모듈 하단이 뷰포트 안에 들어왔을 때 완료 처리한다.
-      // p.height > 0: 이미지가 아직 로드되지 않아 높이가 0인 상태에서
-      // 오완료되는 것을 막기 위한 가드이다.
-      if (
-        p.bottom <= viewportBounds.bottom + 20 &&
-        p.top < viewportBounds.bottom &&
-        p.height > 0
-      ) {
-        var mid = $(el).attr("data-mod-id");
-        if (!moduleExtra[mid].act) setModuleExtra(mid, { process: 1 });
-      }
-    });
-  }
-
-  // near-fit 자동완료는 단일 passive 모듈 페이지에서만 허용한다.
-  // 여러 이미지 모듈이 한 페이지에 있을 때 진입 직후 전체 완료로 찍히는 오탐을 막기 위한 제한이다.
-  function canAutoCompleteNearFitPage() {
-    var activePage = $(".page-item.active");
-    if (!activePage.length) return false;
-
-    var moduleBlocks = activePage.find("[data-mod-id]");
-    if (moduleBlocks.length !== 1) return false;
-
-    var moduleEl = moduleBlocks.first();
-    var mid = moduleEl.attr("data-mod-id");
-    if (!mid || !moduleExtra[mid] || moduleExtra[mid].act) return false;
-
-    // 단일 이미지처럼 "거의 다 보이는 정적 페이지"만 예외 처리한다.
-    // 페이지 전체 기준으로 이미지가 여러 장이면 실제 스크롤을 요구한다.
-    if (activePage.find("img").length > 1) return false;
-
-    // 아직 로드되지 않은 이미지(data-src 대기 중)가 있으면 레이아웃이 확정되지 않은
-    // 상태이므로 near-fit 자동완료를 허용하지 않는다.
-    // 이미지 src 복원 시 MutationObserver가 발동해 진입 직후 progress=1로 찍히는
-    // 오탐을 모든 호출 경로에서 차단하기 위한 보수적 가드이다.
-    if (activePage.find("img[data-src]").length > 0) return false;
-
-    return true;
-  }
-
-  // 스크롤이 거의 필요 없는 페이지(overflow 20px 미만)는 진입 시 바로 자동 완료한다.
-  // 사용자가 체감상 "다 본 페이지"인데 1~19px 차이로 progress가 안 오르는 문제를 막기 위한 예외 규칙이다.
-  function autoCompleteNearFitModules() {
-    if (isIOSDevice && isIOSVideoFullscreen) return;
-    var target = getPageMoreScrollTarget();
-    var overflow = target
-      ? getScrollHeight(target) - getClientHeight(target)
-      : 0;
-    if (
-      canAutoCompleteNearFitPage() &&
-      target &&
-      overflow > 0 &&
-      overflow < 30
-    ) {
-      completeVisiblePassiveModules();
-    }
-  }
-
-  // 화면에 들어온 비상호작용 모듈은 자동 완료 처리한다.
-  // 사용자 스크롤 시 비상호작용 모듈 자동완료와 more 버튼 갱신을 함께 처리한다.
-  function onScroll(e) {
-    if (e && e.type === "scroll") {
-      completeVisiblePassiveModules();
-    }
-    if (isIOSDevice && typeof window.refreshActivePageImages === "function") {
-      window.refreshActivePageImages(false);
-    }
-    schedulePageMoreIndicatorUpdate();
-  }
-
+  // ===== Scroll Event Binding =====
   // 스크롤 이벤트는 스로틀링해 과도한 계산을 줄인다.
   var _scrollThrottleTimer = null;
   var _pendingScrollEvent = null;
@@ -2185,25 +2206,7 @@ function page_initialize() {
   );
   screenBody.on("scroll", schedulePageMoreIndicatorUpdate);
 
-  const intervalTargets = [];
-  // 재생 중인 미디어의 진행 시간을 주기적으로 저장한다.
-  setInterval(function () {
-    for (var target of intervalTargets) {
-      var mid = $(target).parents("[data-mod-id]").attr("data-mod-id");
-      var nCurr = moduleExtra[mid] ? moduleExtra[mid].currentTime || 0 : 0;
-      var currentTime = Math.max(target.currentTime, nCurr);
-      // duration이 NaN(메타데이터 미로드)이거나 0이면 나누기 결과가 NaN·Infinity가 된다.
-      // 유효하지 않은 duration일 때는 process 갱신을 건너뛰고 currentTime만 보존한다.
-      var duration = target.duration;
-      if (!Number.isFinite(duration) || duration <= 0) {
-        setModuleExtra(mid, { currentTime: currentTime });
-        continue;
-      }
-      var process = currentTime / duration;
-      setModuleExtra(mid, { process, currentTime: currentTime });
-    }
-  }, 20000);
-
+  // ===== Quiz Modules =====
   // 복수 선택형 퀴즈 값 수집
   function setQuizValueSelect(o) {
     var parent = $(o).parents("[data-mod-valcheck]");
@@ -2268,6 +2271,51 @@ function page_initialize() {
         );
         label.toggleClass("is-correct-selection", state === "ok" && isSelected);
       });
+  }
+
+  function scrollQuizResultIntoView(parent) {
+    if (!parent || parent.length === 0) return;
+
+    var resultEl =
+      parent.children(".result").get(0) ||
+      parent.find(".result").first().get(0);
+    if (!resultEl) return;
+
+    setTimeout(function () {
+      if (typeof resultEl.scrollIntoView === "function") {
+        resultEl.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+          inline: "nearest",
+        });
+      }
+
+      requestAnimationFrame(function () {
+        var target = getPageMoreScrollTarget();
+        var margin = 20;
+        var nextTop = 0;
+        var resultRect = resultEl.getBoundingClientRect();
+
+        if (
+          !target ||
+          target === window ||
+          target === document ||
+          target === document.body ||
+          target === document.documentElement ||
+          target === document.scrollingElement
+        ) {
+          nextTop =
+            getScrollTop(document.scrollingElement) + resultRect.top - margin;
+          scrollToTop(document.scrollingElement, Math.max(0, nextTop));
+          return;
+        }
+
+        var targetRect = target.getBoundingClientRect();
+        nextTop =
+          getScrollTop(target) + (resultRect.top - targetRect.top) - margin;
+        scrollToTop(target, Math.max(0, nextTop));
+      });
+    }, 40);
   }
 
   function setQuizValue(mid, vs) {
@@ -2410,6 +2458,27 @@ function page_initialize() {
   quizRender();
   reloadProcess();
 
+  // ===== Media Progress Polling =====
+  const intervalTargets = [];
+  // 재생 중인 미디어의 진행 시간을 주기적으로 저장한다.
+  setInterval(function () {
+    for (var target of intervalTargets) {
+      var mid = $(target).parents("[data-mod-id]").attr("data-mod-id");
+      var nCurr = moduleExtra[mid] ? moduleExtra[mid].currentTime || 0 : 0;
+      var currentTime = Math.max(target.currentTime, nCurr);
+      // duration이 NaN(메타데이터 미로드)이거나 0이면 나누기 결과가 NaN·Infinity가 된다.
+      // 유효하지 않은 duration일 때는 process 갱신을 건너뛰고 currentTime만 보존한다.
+      var duration = target.duration;
+      if (!Number.isFinite(duration) || duration <= 0) {
+        setModuleExtra(mid, { currentTime: currentTime });
+        continue;
+      }
+      var process = currentTime / duration;
+      setModuleExtra(mid, { process, currentTime: currentTime });
+    }
+  }, 20000);
+
+  // ===== Media Player Initialization =====
   // 비디오/오디오 플레이어 초기화, 탐색 제한, 워터마크, 자동 재생 제어를 담당한다.
   function videoInit(nowPage) {
     $("video").attr({
