@@ -836,6 +836,8 @@ function page_initialize() {
   var menus = $(".index-list [data-page-id]");
   var menuElements = menus.toArray();
   var menuElementMap = {};
+  var menuPageIds = [];
+  var pageIdToMenuIndexMap = {};
   var pageMoreIndicator = null;
   var pageMoreIndicatorTimer = null;
   var pageMoreObserver = null;
@@ -1288,9 +1290,35 @@ function page_initialize() {
   menus.each(function (i, el) {
     var menuPageId = $(el).attr("data-page-id");
     if (menuPageId) {
+      menuPageIds.push(menuPageId);
+      pageIdToMenuIndexMap[menuPageId] = i;
       menuElementMap[menuPageId] = el;
     }
   });
+
+  function getTrackedPageIds() {
+    return menuPageIds.length > 0 ? menuPageIds : pageIds;
+  }
+
+  function getFinalProgressState() {
+    var trackedPageIds = getTrackedPageIds();
+    var max = trackedPageIds.length;
+    var rateSum = 0;
+
+    for (var i = 0; i < trackedPageIds.length; i++) {
+      var pageId = trackedPageIds[i];
+      var pageIx = pageIds.indexOf(pageId);
+      if (pageIx < 0) continue;
+      rateSum += process[pageIx] || 0;
+    }
+
+    totalProcessSum = rateSum;
+    var finalRate = max > 0 ? rateSum / max : 0;
+    return {
+      finalRate: finalRate,
+      completionStatus: finalRate >= 1 ? "completed" : "incomplete",
+    };
+  }
 
   try {
     for (let i = 0; i < moduleIds.length; i++) {
@@ -1307,20 +1335,13 @@ function page_initialize() {
     // 2.1과 동일하게 목차에 노출되는 페이지 수를 전체 진도 분모로 사용한다.
     // pageIds.length로 계산하면 숨김/비목차 페이지가 있는 과정에서 100%에 도달하지
     // 못할 수 있으므로, 전체 completed 판정도 같은 분모를 따라야 한다.
-    let max = menuElements.length || pageIds.length;
-    let rate = 0;
-    for (let i = 0; i < max; i++) {
-      rate += process[i] || 0;
-    }
-    totalProcessSum = rate;
-
-    // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
-    // 소수점 1자리(10% 단위)로 반올림해 전송한다.
-    let finalRate = max > 0 ? rate / max : 0;
+    // pageIds 순서 대신 실제 메뉴에 노출되는 page id 집합으로 최종 진도를 계산한다.
+    var initialProgressState = getFinalProgressState();
+    let finalRate = initialProgressState.finalRate;
     ScormSet("cmi.progress_measure", finalRate);
     ScormSet(
       "cmi.completion_status",
-      finalRate >= 1 ? "completed" : "incomplete",
+      initialProgressState.completionStatus,
     );
   } catch (e) {
     console.error(e);
@@ -1346,9 +1367,48 @@ function page_initialize() {
     clearTimeout(_suspendDataTimer);
     _suspendDataTimer = setTimeout(_saveSuspendDataNow, 300);
   }
+  var _lastFinalRate = null;
+  var _lastCompletionStatus = null;
+  function flushScormProgressState(force) {
+    var progressState = getFinalProgressState();
+    if (force || progressState.finalRate !== _lastFinalRate) {
+      ScormSet("cmi.progress_measure", progressState.finalRate);
+      _lastFinalRate = progressState.finalRate;
+    }
+    if (force || progressState.completionStatus !== _lastCompletionStatus) {
+      ScormSet("cmi.completion_status", progressState.completionStatus);
+      _lastCompletionStatus = progressState.completionStatus;
+    }
+    return progressState;
+  }
+  function flushQueuedObjectivesNow() {
+    if (queues.length === 0) return;
+    var seen = {};
+    var deduped = [];
+    for (var qi = queues.length - 1; qi >= 0; qi--) {
+      var queued = queues[qi];
+      if (!queued || seen[queued.id]) continue;
+      seen[queued.id] = true;
+      deduped.unshift(queued);
+    }
+    queues = [];
+    for (var di = 0; di < deduped.length; di++) {
+      var item = deduped[di];
+      var pageId = pageIds[item.id];
+      var menuIndex =
+        typeof pageId === "string" ? pageIdToMenuIndexMap[pageId] : undefined;
+      if (typeof menuIndex !== "number") continue;
+      ScormSet(
+        "cmi.objectives." + menuIndex + ".progress_measure",
+        item.value,
+      );
+    }
+  }
   window.addEventListener("beforeunload", function () {
     clearTimeout(_suspendDataTimer);
     _saveSuspendDataNow();
+    flushQueuedObjectivesNow();
+    flushScormProgressState(true);
   });
 
   // ===== Module Progress / Completion / Sequential Navigation =====
@@ -1428,6 +1488,13 @@ function page_initialize() {
       _saveSuspendDataDebounced();
     }
     renderModuleExtra(mid);
+    if (nextProcess === 1) {
+      var progressState = getFinalProgressState();
+      if (progressState.finalRate >= 1) {
+        flushQueuedObjectivesNow();
+        flushScormProgressState(true);
+      }
+    }
     if (window.swiper)
       window.swiper.allowSlideNext = !isParentFunc("next") && isNextAllow();
   }
@@ -1525,19 +1592,29 @@ function page_initialize() {
 
   // 오른쪽 목차의 progress bar와 완료 아이콘 상태를 현재 process 배열 기준으로 다시 그린다.
   function reloadProcess(targetIndex) {
-    var hasTargetIndex = typeof targetIndex === "number";
-    var start = hasTargetIndex ? targetIndex : 0;
-    var end = hasTargetIndex ? targetIndex + 1 : menuElements.length;
+    var targetMenuIndex = null;
+    if (typeof targetIndex === "number") {
+      var targetPageId = pageIds[targetIndex];
+      if (targetPageId in pageIdToMenuIndexMap) {
+        targetMenuIndex = pageIdToMenuIndexMap[targetPageId];
+      } else {
+        return;
+      }
+    }
+    var start = targetMenuIndex === null ? 0 : targetMenuIndex;
+    var end = targetMenuIndex === null ? menuPageIds.length : targetMenuIndex + 1;
 
     for (var i = start; i < end; i++) {
+      var pageId = menuPageIds[i];
       var el = menuElements[i];
       if (!el) continue;
-      var percent = process[i] || 0;
+      var pageIx = pageIds.indexOf(pageId);
+      var percent = pageIx >= 0 ? process[pageIx] || 0 : 0;
       var bar = el.querySelector(".bar");
       if (bar) {
         bar.style.setProperty("--progress", percent);
       }
-      $(el).toggleClass("finish", isPageComplete(pageIds[i]));
+      $(el).toggleClass("finish", isPageComplete(pageId));
     }
   }
 
@@ -1578,10 +1655,6 @@ function page_initialize() {
   // ===== SCORM Queue / Initial UI Sync =====
   reloadProcess();
 
-  // SCORM 값은 이전 기록과 비교해 바뀐 경우에만 다시 저장한다.
-  var _lastFinalRate = null;
-  var _lastCompletionStatus = null;
-
   function runQueue() {
     if (isQueue) return;
     if (queues.length === 0) {
@@ -1592,32 +1665,19 @@ function page_initialize() {
     var item = queues[0];
     queues.splice(0, 1);
 
-    // 페이지별 objective 진행률을 먼저 반영한다.
-    ScormSet("cmi.objectives." + item.id + ".progress_measure", item.value);
-
-    // process 배열에서 매번 직접 합산해 부동소수점 누적 오차를 방지한다.
-    // 2.1과 동일하게 목차에 노출되는 페이지 수를 전체 진도 분모로 사용한다.
-    // 이 분모가 초기 progress_measure 계산과 달라지면 completed 판정이 흔들린다.
-    let max = menuElements.length || pageIds.length;
-    var rateSum = 0;
-    for (var pi = 0; pi < max; pi++) {
-      rateSum += process[pi] || 0;
+    // objective는 실제 메뉴에 노출되는 페이지에 대해서만 기록한다.
+    var pageId = pageIds[item.id];
+    var menuIndex =
+      typeof pageId === "string" ? pageIdToMenuIndexMap[pageId] : undefined;
+    if (typeof menuIndex === "number") {
+      ScormSet(
+        "cmi.objectives." + menuIndex + ".progress_measure",
+        item.value,
+      );
     }
-    totalProcessSum = rateSum;
-    // 페이지가 없으면 0으로 처리해 NaN이 저장되지 않도록 방어한다.
-    // 소수점 1자리(10% 단위)로 반올림해 전송한다.
-    let finalRate = max > 0 ? rateSum / max : 0;
-    var completionStatus = finalRate >= 1 ? "completed" : "incomplete";
 
     // 최종 진도와 완료 상태는 값이 실제로 바뀐 경우에만 저장한다.
-    if (finalRate !== _lastFinalRate) {
-      ScormSet("cmi.progress_measure", finalRate);
-      _lastFinalRate = finalRate;
-    }
-    if (completionStatus !== _lastCompletionStatus) {
-      ScormSet("cmi.completion_status", completionStatus);
-      _lastCompletionStatus = completionStatus;
-    }
+    flushScormProgressState(false);
 
     setTimeout(function () {
       isQueue = false;
@@ -1659,6 +1719,9 @@ function page_initialize() {
     pageIndex = index;
     pageIdItems.removeClass("active");
     $("[data-page-id='" + index + "']").addClass("active");
+    if ((!isSwipe || !swiper) && lastPageShowedId !== index) {
+      pageShowed(index);
+    }
     updateSwipeNavigationVisibility();
     scrollActiveMenuIntoView();
     autoCompleteNearFitModules();
@@ -1892,8 +1955,11 @@ function page_initialize() {
     );
   }
 
+  var lastPageShowedId = null;
+
   // 활성 페이지에 필요한 리소스(이미지/비디오)만 붙이고 관련 옵저버를 연결한다.
   function pageShowed(id) {
+    lastPageShowedId = id;
     var nowPage = $("[data-page-id='" + id + "']");
     observeActivePageMoreChanges(nowPage.get(0));
 
